@@ -194,16 +194,19 @@ def analyze_perm(
     mask = np.zeros((n_pop, n_genes), dtype=bool)
     perms = np.stack([ind.permutation for ind in population])
 
+    left = perms[:, :-1]
+    right = perms[:, 1:]
+    pair_match = (
+        (left[:, None, :] == left[None, :, :])
+        & (right[:, None, :] == right[None, :, :])
+    )
+    pair_count = pair_match.sum(axis=1) - 1
+    eligible = pair_count >= n_fixed
+
     for row in range(n_pop):
         col = 0
         while col < n_genes - 1:
-            temp = 0
-            for other in range(n_pop):
-                if other == row:
-                    continue
-                if perms[row, col] == perms[other, col] and perms[row, col + 1] == perms[other, col + 1]:
-                    temp += 1
-            if temp >= n_fixed:
+            if eligible[row, col]:
                 mask[row, col : col + 2] = True
                 col += 2
             else:
@@ -212,7 +215,7 @@ def analyze_perm(
     dominant_idx = 0
     dominant_score = -1
     for idx in range(n_pop):
-        score = mask[idx].sum()
+        score = int(mask[idx].sum())
         if score > dominant_score:
             dominant_idx = idx
             dominant_score = score

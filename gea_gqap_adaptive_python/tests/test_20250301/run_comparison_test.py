@@ -17,6 +17,7 @@ os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 import json
 import sys
 import time
+import threading
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -38,7 +39,7 @@ from gea_gqap_adaptive_python import (
 from gea_gqap_python import load_model as load_model_na
 from gea_gqap_python.algorithm import run_ga, AlgorithmConfig
 
-NUM_WORKERS = int(os.environ.get("NUM_WORKERS", 16))
+NUM_WORKERS = int(os.environ.get("NUM_WORKERS", 10))
 
 
 def _ts() -> str:
@@ -259,6 +260,19 @@ def run_dataset_tests(dataset_name: str, output_dir: Path) -> Dict[str, Any]:
     errors = 0
     t_start = time.monotonic()
 
+    heartbeat_stop = threading.Event()
+
+    def _heartbeat():
+        while not heartbeat_stop.wait(300):
+            elapsed = time.monotonic() - t_start
+            print(
+                f"  [{_ts()}] heartbeat: {done_count}/{total} задач завершено | {_fmt_duration(elapsed)}",
+                flush=True,
+            )
+
+    hb_thread = threading.Thread(target=_heartbeat, daemon=True)
+    hb_thread.start()
+
     with ProcessPoolExecutor(max_workers=NUM_WORKERS) as executor:
         futures = {executor.submit(_worker, t): t for t in tasks}
         done_count = 0
@@ -275,6 +289,8 @@ def run_dataset_tests(dataset_name: str, output_dir: Path) -> Dict[str, Any]:
                 elapsed = time.monotonic() - t_start
                 pct = done_count / total * 100
                 print(f"  [{_ts()}] {done_count}/{total} ({pct:.0f}%) | {_fmt_duration(elapsed)}", flush=True)
+
+    heartbeat_stop.set()
 
     ds_elapsed = time.monotonic() - t_start
     print(f"  --- Результаты ({dataset_name}, {_fmt_duration(ds_elapsed)}) ---", flush=True)
