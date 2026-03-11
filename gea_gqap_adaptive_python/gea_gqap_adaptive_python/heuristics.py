@@ -8,9 +8,11 @@ from .utils import evaluate_permutation
 
 def heuristic2(model: Model) -> Individual:
     """
-    Initial solution + repair. Matches MATLAB Heuristic2.m:
-    CT(i,j) = cij(i,j) + sum(DIS(i,:)) + sum(F(j,:)); assign job j to facility with min CT(:,j)
-    respecting capacity (try all in order); then cascading repair while min(cvar)<0.
+    Initial solution + repair. Matches MATLAB Heuristic2.m exactly:
+    - CT(i,j) = cij(i,j) + sum(DIS(i,:)) + sum(F(j,:))
+    - For each job j: pick facility b = argmin CT(:,j); if count(b)<=bi(b) assign, else
+      mask CT(b,j), recompute b, try again (up to 3 attempts, then force assign).
+    - Then cascading repair while min(cvar)<0.
     """
     I, J = model.I, model.J
     X = np.zeros((I, J), dtype=int)
@@ -22,19 +24,22 @@ def heuristic2(model: Model) -> Individual:
             CT[i, j] = model.cij[i, j] + model.DIS[i].sum() + model.F[j].sum()
 
     for j in range(J):
-        candidates = CT[:, j]
-        order = np.argsort(candidates)
-        assigned = False
-        for idx in order:
-            if count[idx] + model.aij[idx, j] <= model.bi[idx]:
-                X[idx, j] = 1
-                count[idx] += model.aij[idx, j]
-                assigned = True
-                break
-        if not assigned:
-            idx = order[0]
-            X[idx, j] = 1
-            count[idx] += model.aij[idx, j]
+        b = int(np.argmin(CT[:, j]))
+        if count[b] <= model.bi[b]:
+            X[b, j] = 1
+            count[b] += model.aij[b, j]
+        else:
+            ct_max = float(np.max(CT))
+            CT[b, j] = ct_max
+            b = int(np.argmin(CT[:, j]))
+            if count[b] <= model.bi[b]:
+                X[b, j] = 1
+                count[b] += model.aij[b, j]
+            else:
+                CT[b, j] = ct_max
+                b = int(np.argmin(CT[:, j]))
+                X[b, j] = 1
+                count[b] += model.aij[b, j]
 
     # Repair feasibility (MATLAB-style cascading repair)
     cvar = model.bi - count
