@@ -352,10 +352,38 @@ def main() -> None:
         },
     }
 
+    # Convert best levels -> concrete coefficients (values) for direct use in config.
+    best_level_by_param = {p: int(lvl) for p, lvl in zip(param_names, mep.best_levels)}
+    best_values_by_param: Dict[str, float | int] = {}
+    best_config_kwargs: Dict[str, float | int] = {}
+    for p in param_names:
+        lvl = best_level_by_param[p]
+        if lvl not in (1, 2, 3):
+            continue
+        val = float(param_levels[p][lvl - 1])
+        # Keep same casting rules as _build_config_kwargs
+        field = _map_param(p)
+        if field is None:
+            best_values_by_param[p] = val
+            continue
+        if field in ("population_size", "mask_mutation_index"):
+            best_config_kwargs[field] = int(round(val))
+            best_values_by_param[p] = int(round(val))
+        else:
+            best_config_kwargs[field] = float(val)
+            best_values_by_param[p] = float(val)
+
+    payload["recommended"] = {
+        "best_level_by_param": best_level_by_param,
+        "best_value_by_param": best_values_by_param,
+        "config_kwargs": best_config_kwargs,
+    }
+
     _write_json(out_path, payload)
     elapsed_total = time.monotonic() - started_at
     print(f"[{_ts()}] Saved final: {out_path}", flush=True)
     print(f"[{_ts()}] Best levels: {mep.best_levels}", flush=True)
+    print(f"[{_ts()}] Recommended config kwargs: {best_config_kwargs}", flush=True)
     print(f"[{_ts()}] Total elapsed: {_fmt_duration(elapsed_total)}", flush=True)
 
 
