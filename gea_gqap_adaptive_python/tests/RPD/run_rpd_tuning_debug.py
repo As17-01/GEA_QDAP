@@ -22,7 +22,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 
 import numpy as np
 
@@ -165,22 +165,43 @@ def _build_config_kwargs(param_levels: Dict[str, Tuple[float, float, float]], le
     return kwargs
 
 
+def _load_taguchi_from_repo_config(sheet_name: str, block_name: str) -> tuple[Dict[str, Tuple[float, float, float]], List[List[int]], Dict[str, Any]]:
+    """
+    Load Taguchi parameter levels + table from a repo-tracked JSON config.
+    This removes the runtime dependency on the Excel file on the cluster.
+    """
+    cfg_path = Path(os.environ.get("RPD_TAGUCHI_CONFIG", str(TEST_DIR / "taguchi_config_RPD.json"))).resolve()
+    data = json.loads(cfg_path.read_text(encoding="utf-8"))
+    sheets = data.get("sheets", {})
+    if sheet_name not in sheets:
+        raise KeyError(f"Sheet '{sheet_name}' not found in {cfg_path}. Available: {sorted(sheets.keys())}")
+    sheet = sheets[sheet_name]
+    if block_name not in sheet:
+        raise KeyError(f"Block '{block_name}' not found for sheet '{sheet_name}' in {cfg_path}.")
+    block = sheet[block_name]
+
+    param_levels_raw = block["param_levels"]
+    param_levels: Dict[str, Tuple[float, float, float]] = {
+        str(k): (float(v[0]), float(v[1]), float(v[2])) for k, v in param_levels_raw.items()
+    }
+    table = [[int(x) for x in row] for row in block["table"]]
+    meta = {"config_path": str(cfg_path), "sheet": sheet_name, "block": block_name}
+    return param_levels, table, meta
+
+
 def main() -> None:
     _ensure_sys_path()
     from gea_gqap_adaptive_python import AdaptiveAlgorithmConfig, load_model, run_adaptive_ga
     try:
-        from .excel_taguchi_parser import parse_sheet_blocks  # type: ignore
         from .rpd_utils import mepfm, rpd_matlab  # type: ignore
     except Exception:  # pragma: no cover
         import sys
 
         sys.path.insert(0, str(TEST_DIR.parent))
-        from excel_taguchi_parser import parse_sheet_blocks  # type: ignore
         from rpd_utils import mepfm, rpd_matlab  # type: ignore
 
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
-    excel_path = (REPO_ROOT / "Nikita_AL-GEA.xlsx").resolve()
     sheet_name = os.environ.get("RPD_SHEET", "GEA_2")
     block_name = os.environ.get("RPD_BLOCK", "adaptive")  # "base" or "adaptive"
 
@@ -192,11 +213,10 @@ def main() -> None:
     num_workers = int(os.environ.get("RPD_NUM_WORKERS", os.environ.get("NUM_WORKERS", "16")))
 
     datasets = _pick_datasets()
-    parsed = parse_sheet_blocks(excel_path, sheet_name)
-    block = parsed.blocks[block_name]
+    param_levels, table_list, taguchi_meta = _load_taguchi_from_repo_config(sheet_name, block_name)
 
-    param_names = list(block.param_levels.keys())
-    table = np.array(block.table, dtype=int)
+    param_names = list(param_levels.keys())
+    table = np.array(table_list, dtype=int)
     if max_rows and max_rows < table.shape[0]:
         table = table[:max_rows, :]
 
@@ -214,6 +234,7 @@ def main() -> None:
     total_tasks_all = total_rows * len(datasets) * num_runs
     print(f"[{_ts()}] === RPD tuning start ===", flush=True)
     print(f"[{_ts()}] Sheet={sheet_name} block={block_name}", flush=True)
+    print(f"[{_ts()}] Taguchi config: {taguchi_meta['config_path']}", flush=True)
     print(f"[{_ts()}] Taguchi rows={total_rows} (max_rows={max_rows or 'all'})", flush=True)
     print(f"[{_ts()}] Datasets={len(datasets)} runs_per_dataset={num_runs} workers={num_workers}", flush=True)
     print(f"[{_ts()}] Iterations={iterations} time_limit={time_limit}", flush=True)
@@ -223,7 +244,7 @@ def main() -> None:
     for run_idx in range(table.shape[0]):
         row_started_at = time.monotonic()
         row_levels = table[run_idx, :].tolist()
-        cfg_kwargs = _build_config_kwargs(block.param_levels, row_levels)
+        cfg_kwargs = _build_config_kwargs(param_levels, row_levels)
 
         tasks: List[Tuple[str, int, Dict, int, float, str]] = []
         for ds in datasets:
@@ -285,12 +306,12 @@ def main() -> None:
         _write_json(
             out_path,
             {
-                "excel": {"path": str(excel_path), "sheet": sheet_name, "block": block_name},
+                "taguchi_config": taguchi_meta,
                 "datasets": datasets,
                 "debug_overrides": {"iterations": iterations, "time_limit": time_limit, "num_runs": num_runs},
                 "param_names": param_names,
-                "param_levels": {k: list(v) for k, v in block.param_levels.items()},
-                "taguchi_table": block.table,
+                "param_levels": {k: list(v) for k, v in param_levels.items()},
+                "taguchi_table": table_list,
                 "progress": {
                     "completed_rows": int(run_idx + 1),
                     "total_rows": int(total_rows),
@@ -314,12 +335,12 @@ def main() -> None:
     mep = mepfm(mean_rpd, table, param_names=param_names)
 
     payload = {
-        "excel": {"path": str(excel_path), "sheet": sheet_name, "block": block_name},
+        "taguchi_config": taguchi_meta,
         "datasets": datasets,
         "debug_overrides": {"iterations": iterations, "time_limit": time_limit, "num_runs": num_runs},
         "param_names": param_names,
-        "param_levels": {k: list(v) for k, v in block.param_levels.items()},
-        "taguchi_table": block.table,
+        "param_levels": {k: list(v) for k, v in param_levels.items()},
+        "taguchi_table": table_list,
         "response_mean_best_cost": response.tolist(),
         "raw_best_costs": raw_costs,
         "rpd": rpd.tolist(),
