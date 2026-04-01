@@ -18,6 +18,9 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -33,6 +36,28 @@ os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 TEST_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TEST_DIR.parent.parent.parent
 sys_path_added = False
+
+
+def _ts() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _fmt_duration(seconds: float) -> str:
+    s = int(seconds)
+    if s < 60:
+        return f"{s} s"
+    if s < 3600:
+        return f"{s // 60} min {s % 60} s"
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h} h {m} min {sec} s"
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(path)
 
 
 def _ensure_sys_path() -> None:
@@ -180,7 +205,23 @@ def main() -> None:
         [[0.0 for _ in range(num_runs)] for _ in datasets] for _ in range(table.shape[0])
     ]
 
+    out_dir = TEST_DIR / "results"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"rpd_tuning_{sheet_name}_{block_name}.json"
+
+    started_at = time.monotonic()
+    total_rows = int(table.shape[0])
+    total_tasks_all = total_rows * len(datasets) * num_runs
+    print(f"[{_ts()}] === RPD tuning start ===", flush=True)
+    print(f"[{_ts()}] Sheet={sheet_name} block={block_name}", flush=True)
+    print(f"[{_ts()}] Taguchi rows={total_rows} (max_rows={max_rows or 'all'})", flush=True)
+    print(f"[{_ts()}] Datasets={len(datasets)} runs_per_dataset={num_runs} workers={num_workers}", flush=True)
+    print(f"[{_ts()}] Iterations={iterations} time_limit={time_limit}", flush=True)
+    print(f"[{_ts()}] Output JSON: {out_path}", flush=True)
+    print(f"[{_ts()}] Total tasks: {total_tasks_all}", flush=True)
+
     for run_idx in range(table.shape[0]):
+        row_started_at = time.monotonic()
         row_levels = table[run_idx, :].tolist()
         cfg_kwargs = _build_config_kwargs(block.param_levels, row_levels)
 
@@ -194,10 +235,42 @@ def main() -> None:
 
         with ProcessPoolExecutor(max_workers=num_workers) as ex:
             futures = [ex.submit(_worker_process, t) for t in tasks]
+            done = 0
+            errors = 0
+
+            heartbeat_stop = threading.Event()
+
+            def _heartbeat() -> None:
+                while not heartbeat_stop.wait(300):
+                    elapsed = time.monotonic() - row_started_at
+                    print(
+                        f"[{_ts()}] heartbeat row {run_idx + 1}/{total_rows}: {done}/{len(tasks)} done "
+                        f"({done/len(tasks)*100:.0f}%) | {_fmt_duration(elapsed)}",
+                        flush=True,
+                    )
+
+            hb = threading.Thread(target=_heartbeat, daemon=True)
+            hb.start()
+
             for fut in as_completed(futures):
-                ds, r, cost = fut.result()
-                di = ds_to_idx[ds]
-                costs_acc[di][r] = cost
+                try:
+                    ds, r, cost = fut.result()
+                    di = ds_to_idx[ds]
+                    costs_acc[di][r] = cost
+                except Exception as e:
+                    errors += 1
+                    print(f"[{_ts()}] ERR row {run_idx + 1}: {e}", flush=True)
+                finally:
+                    done += 1
+                    if done % max(1, num_workers) == 0 or done == len(tasks):
+                        elapsed = time.monotonic() - row_started_at
+                        print(
+                            f"[{_ts()}] row {run_idx + 1}/{total_rows}: {done}/{len(tasks)} "
+                            f"({done/len(tasks)*100:.0f}%) | {_fmt_duration(elapsed)}",
+                            flush=True,
+                        )
+
+            heartbeat_stop.set()
 
         for ds_i, costs in enumerate(costs_acc):
             if any(not np.isfinite(c) for c in costs):
@@ -205,15 +278,40 @@ def main() -> None:
             raw_costs[run_idx][ds_i] = costs
             response[run_idx, ds_i] = float(np.mean(costs))
 
+        # Save partial progress after each Taguchi row (so logs/results are inspectable mid-run).
+        response_so_far = response[: run_idx + 1, :].copy()
+        rpd_so_far = rpd_matlab(response_so_far, flag=1)
+        mean_rpd_so_far = rpd_so_far.mean(axis=1)
+        _write_json(
+            out_path,
+            {
+                "excel": {"path": str(excel_path), "sheet": sheet_name, "block": block_name},
+                "datasets": datasets,
+                "debug_overrides": {"iterations": iterations, "time_limit": time_limit, "num_runs": num_runs},
+                "param_names": param_names,
+                "param_levels": {k: list(v) for k, v in block.param_levels.items()},
+                "taguchi_table": block.table,
+                "progress": {
+                    "completed_rows": int(run_idx + 1),
+                    "total_rows": int(total_rows),
+                    "elapsed_seconds": round(time.monotonic() - started_at, 1),
+                },
+                "response_mean_best_cost": response_so_far.tolist(),
+                "raw_best_costs": raw_costs[: run_idx + 1],
+                "rpd": rpd_so_far.tolist(),
+                "mean_rpd": mean_rpd_so_far.tolist(),
+            },
+        )
+        print(
+            f"[{_ts()}] Saved progress ({run_idx + 1}/{total_rows}) -> {out_path}",
+            flush=True,
+        )
+
     # RPD normalization per dataset (column-wise, like MATLAB flag=1)
     rpd = rpd_matlab(response, flag=1)
     mean_rpd = rpd.mean(axis=1)
 
     mep = mepfm(mean_rpd, table, param_names=param_names)
-
-    out_dir = TEST_DIR / "results"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"rpd_tuning_{sheet_name}_{block_name}.json"
 
     payload = {
         "excel": {"path": str(excel_path), "sheet": sheet_name, "block": block_name},
@@ -233,9 +331,11 @@ def main() -> None:
         },
     }
 
-    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"Saved: {out_path}")
-    print("Best levels:", mep.best_levels)
+    _write_json(out_path, payload)
+    elapsed_total = time.monotonic() - started_at
+    print(f"[{_ts()}] Saved final: {out_path}", flush=True)
+    print(f"[{_ts()}] Best levels: {mep.best_levels}", flush=True)
+    print(f"[{_ts()}] Total elapsed: {_fmt_duration(elapsed_total)}", flush=True)
 
 
 if __name__ == "__main__":
