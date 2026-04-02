@@ -136,6 +136,7 @@ def _map_param(name: str) -> str | None:
         "PFixedX": "p_fixed_x",
         "PCrossoverScenario1": "scenario_crossover_rate",
         "PMutationScenario2": "scenario_mutation_rate",
+        "PMutationScenario3": "scenario_mutation_rate",
         # adaptive params
         "alpha": "adaptive_alpha",
         "lambda_min": "adaptive_lambda_min",

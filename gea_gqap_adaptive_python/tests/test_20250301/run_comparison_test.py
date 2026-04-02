@@ -28,7 +28,10 @@ import numpy as np
 
 TEST_DIR = Path(__file__).parent
 sys.path.insert(0, str(TEST_DIR.parent.parent))
+sys.path.insert(0, str(TEST_DIR.parent))
 sys.path.insert(0, str(TEST_DIR.parent.parent.parent / "GEA_GQAP_Python"))
+
+from comparison_config_merge import merged_algorithm_for_model
 
 from gea_gqap_adaptive_python import (
     AdaptiveAlgorithmConfig,
@@ -97,9 +100,14 @@ CONFIG = _get_config()
 MODEL_VARIANTS = CONFIG["model_variants_tuple"]
 ALGORITHM_TYPES = CONFIG["algorithm_types"]
 ALGORITHM = CONFIG.get("algorithm", {})
+ALGORITHM_BY_MODEL = CONFIG.get("algorithm_by_model") or {}
 NUM_RUNS = CONFIG.get("num_runs", 30)
 ITERATIONS = CONFIG.get("iterations", 1000)
 POPULATION_SIZE = CONFIG.get("population_size", 350)
+
+
+def _algorithm_for(model_key: str) -> Dict[str, Any]:
+    return merged_algorithm_for_model(ALGORITHM, ALGORITHM_BY_MODEL, model_key)
 
 
 def calculate_statistics(values: List[float]) -> Dict[str, float]:
@@ -114,11 +122,17 @@ def calculate_statistics(values: List[float]) -> Dict[str, float]:
     }
 
 
-def _make_adaptive_config(enable_scenario: Tuple[bool, bool, bool], deduplicate: bool):
-    alg = ALGORITHM
+def _make_adaptive_config(
+    model_key: str,
+    enable_scenario: Tuple[bool, bool, bool],
+    deduplicate: bool,
+):
+    alg = _algorithm_for(model_key)
+    it = int(alg.get("iterations", ITERATIONS))
+    pop = int(alg.get("population_size", POPULATION_SIZE))
     return AdaptiveAlgorithmConfig(
-        iterations=ITERATIONS,
-        population_size=POPULATION_SIZE,
+        iterations=it,
+        population_size=pop,
         crossover_rate=alg.get("crossover_rate", 0.7),
         mutation_rate=alg.get("mutation_rate", 0.3),
         scenario_crossover_rate=alg.get("scenario_crossover_rate", 0.5),
@@ -138,11 +152,17 @@ def _make_adaptive_config(enable_scenario: Tuple[bool, bool, bool], deduplicate:
     )
 
 
-def _make_non_adaptive_config(enable_scenario: Tuple[bool, bool, bool], deduplicate: bool):
-    alg = ALGORITHM
+def _make_non_adaptive_config(
+    model_key: str,
+    enable_scenario: Tuple[bool, bool, bool],
+    deduplicate: bool,
+):
+    alg = _algorithm_for(model_key)
+    it = int(alg.get("iterations", ITERATIONS))
+    pop = int(alg.get("population_size", POPULATION_SIZE))
     return AlgorithmConfig(
-        iterations=ITERATIONS,
-        population_size=POPULATION_SIZE,
+        iterations=it,
+        population_size=pop,
         crossover_rate=alg.get("crossover_rate", 0.7),
         mutation_rate=alg.get("mutation_rate", 0.3),
         scenario_crossover_rate=alg.get("scenario_crossover_rate", 0.5),
@@ -161,11 +181,12 @@ def _make_non_adaptive_config(enable_scenario: Tuple[bool, bool, bool], deduplic
 def _run_one_adaptive(
     dataset_name: str,
     run_number: int,
+    model_key: str,
     enable_scenario: Tuple[bool, bool, bool],
     deduplicate: bool,
 ) -> Dict[str, Any]:
     model = load_model_adaptive(dataset_name)
-    config = _make_adaptive_config(enable_scenario, deduplicate)
+    config = _make_adaptive_config(model_key, enable_scenario, deduplicate)
     result = run_adaptive_ga(model, config=config)
     iterations_data = []
     if result.adaptive_stats.lambda_history:
@@ -206,11 +227,12 @@ def _run_one_adaptive(
 def _run_one_non_adaptive(
     dataset_name: str,
     run_number: int,
+    model_key: str,
     enable_scenario: Tuple[bool, bool, bool],
     deduplicate: bool,
 ) -> Dict[str, Any]:
     model = load_model_na(dataset_name)
-    config = _make_non_adaptive_config(enable_scenario, deduplicate)
+    config = _make_non_adaptive_config(model_key, enable_scenario, deduplicate)
     result = run_ga(model, config=config)
     iterations_data = [
         {"iteration": i + 1, "best_cost": float(c)}
@@ -238,9 +260,13 @@ def _worker(task: Tuple) -> Tuple[str, str, int, Dict[str, Any] | None, str | No
 
     try:
         if is_adaptive:
-            result = _run_one_adaptive(dataset_name, run_num, enable_scenario, deduplicate=dedupe)
+            result = _run_one_adaptive(
+                dataset_name, run_num, model_key, enable_scenario, deduplicate=dedupe
+            )
         else:
-            result = _run_one_non_adaptive(dataset_name, run_num, enable_scenario, deduplicate=dedupe)
+            result = _run_one_non_adaptive(
+                dataset_name, run_num, model_key, enable_scenario, deduplicate=dedupe
+            )
         return (model_key, algo_type, run_num, result, None)
     except Exception as e:
         return (model_key, algo_type, run_num, None, str(e))
@@ -328,6 +354,7 @@ def run_dataset_tests(dataset_name: str, output_dir: Path) -> Dict[str, Any]:
         "population_size": POPULATION_SIZE,
         "time_limit_seconds": float(ALGORITHM.get("time_limit", 1000)),
         "algorithm_types": ALGORITHM_TYPES,
+        "parameters_resolved_by_model": {mk: _algorithm_for(mk) for mk in MODEL_VARIANTS},
         "models": models_results,
     }
     if output_dir:
@@ -419,7 +446,9 @@ def _main_impl(test_dir: Path, results_dir: Path, log_path: Path):
     print(f"[{_ts()}] Типы: {', '.join(ALGORITHM_TYPES)}")
     print(f"[{_ts()}] Модели: {', '.join(MODEL_VARIANTS.keys())}")
     print(f"[{_ts()}] Датасетов: {len(datasets)} (T + c), по {NUM_RUNS} запусков на тип")
-    print(f"[{_ts()}] Итераций: {ITERATIONS}, популяция: {POPULATION_SIZE}, лимит времени: {time_limit} с")
+    print(f"[{_ts()}] Итераций (база): {ITERATIONS}, популяция (база): {POPULATION_SIZE}, лимит времени: {time_limit} с")
+    if ALGORITHM_BY_MODEL:
+        print(f"[{_ts()}] Параметры по моделям: {', '.join(ALGORITHM_BY_MODEL.keys())}", flush=True)
     print(f"[{_ts()}] Параллельных воркеров: {NUM_WORKERS}")
     print(f"[{_ts()}] Всего задач: {total_tasks}")
 
@@ -450,6 +479,9 @@ def _main_impl(test_dir: Path, results_dir: Path, log_path: Path):
             "algorithm_types": ALGORITHM_TYPES,
             "model_variants": list(MODEL_VARIANTS.keys()),
             "num_workers": NUM_WORKERS,
+            "algorithm_base": ALGORITHM,
+            "algorithm_by_model": ALGORITHM_BY_MODEL,
+            "parameters_resolved_by_model": {mk: _algorithm_for(mk) for mk in MODEL_VARIANTS},
         },
         "datasets": [r["dataset"] for r in all_results],
         "results": all_results,
