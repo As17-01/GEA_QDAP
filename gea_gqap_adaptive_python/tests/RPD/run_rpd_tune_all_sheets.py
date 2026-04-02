@@ -11,6 +11,8 @@ run_rpd_tuning_debug.py (RPD_ITERATIONS, RPD_TIME_LIMIT, RPD_NUM_RUNS, …).
 Пример (полноценный тюнинг на кластере):
   export RPD_ITERATIONS=1000 RPD_TIME_LIMIT=1000 RPD_NUM_RUNS=5
   python3 run_rpd_tune_all_sheets.py
+
+Дальше перенос коэффициентов в тест: `export_recommended_to_test_config.py` и `README_RPD.md`.
 """
 
 from __future__ import annotations

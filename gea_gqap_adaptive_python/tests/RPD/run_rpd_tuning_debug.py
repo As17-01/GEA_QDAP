@@ -12,6 +12,9 @@ What it does (small-scale, for debugging):
 
 Outputs:
 - JSON with raw costs + RPD + chosen best levels in `gea_gqap_adaptive_python/tests/RPD/results/`
+- Final payload includes `recommended.config_kwargs` for pasting into `test_config.json` (`algorithm_by_model`).
+
+Full restart / cluster settings / batch by sheet: see `README_RPD.md` in this folder.
 """
 
 from __future__ import annotations
