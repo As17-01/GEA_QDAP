@@ -1,7 +1,0 @@
-Dataset: c351595
-Iterations requested: 1500
-Iterations executed: 1500
-Elapsed time (s): 85.45
-Best cost: 22016.084136
-Final assignment (first 15 jobs): [9, 9, 9, 11, 9, 9, 11, 9, 11, 9, 11, 9, 11, 11, 6]
-Average contribution rates (population/crossover/mutation/scenario): 0.960 0.018 0.002 0.020
