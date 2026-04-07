@@ -187,8 +187,8 @@ def _worker_process(
         )
         res = run_adaptive_ga(model, config=cfg)
     else:
-        from gea_gqap_python import load_model as load_model_na
-        from gea_gqap_python.algorithm import run_ga, AlgorithmConfig
+        from gea_gqap_adaptive_python import load_model as load_model_na
+        from gea_gqap_adaptive_python.algorithm import run_ga, AlgorithmConfig
 
         base = {k: v for k, v in cfg_kwargs.items() if k not in ADAPTIVE_ONLY_PARAM_KEYS}
         names = {f.name for f in dataclasses.fields(AlgorithmConfig)}
