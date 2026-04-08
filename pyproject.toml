@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Genetic Engineering Algorithm for GQAP with adaptive deduplication"
 authors = ["nalebedev"]
 packages = [
-    { include = "gea_gqap_python", from = "GEA_GQAP_Python" },
     { include = "gea_gqap_adaptive_python", from = "gea_gqap_adaptive_python" },
 ]
 

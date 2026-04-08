@@ -1,5 +1,136 @@
-# GEA QDAP — Adaptive and Deduplication (Optimized)
+# Адаптивный GEA для GQAP
 
-Genetic Engineering Algorithm for the Generalized Quadratic Assignment Problem (GQAP): adaptive version with deduplication.
+Адаптивная версия генетического эволюционного алгоритма (GEA) для обобщенной квадратичной задачи размещения (GQAP).
 
-**Optimized** variant: fixes for T-datasets (no hang on population init), cascading repair in `heuristic2`, `n_pop`-safe indices. See [BUGFIX_T_DATASETS.md](BUGFIX_T_DATASETS.md).
+## Особенности
+
+- **Адаптивные лямбды**: Динамическое обновление параметров операторов (кроссовер, мутация, сценарии) на основе их эффективности
+- **Метрики по итерациям**: Сохранение истории лямбд, дельта-значений и вклада операторов в JSON
+- **Сравнение алгоритмов**: Встроенный скрипт для сравнения адаптивного и неадаптивного подходов
+
+## Установка
+
+```bash
+cd gea_gqap_adaptive_python
+# Убедитесь, что установлены зависимости:
+# numpy, pytest (для тестов)
+```
+
+## Использование
+
+### Базовый пример
+
+```python
+from gea_gqap_adaptive_python import (
+    load_model,
+    run_adaptive_ga,
+    AdaptiveAlgorithmConfig,
+    save_results_to_json,
+)
+from pathlib import Path
+
+# Загрузка модели
+model = load_model("c351595")
+
+# Конфигурация
+config = AdaptiveAlgorithmConfig(
+    iterations=1500,
+    population_size=120,
+    crossover_rate=0.7,
+    mutation_rate=0.3,
+    adaptive_epsilon=1e-5,
+    adaptive_alpha=0.01,
+    adaptive_lambda_min=0.4,
+    adaptive_lambda_max=1.5,
+)
+
+# Запуск алгоритма
+result = run_adaptive_ga(model, config=config)
+
+print(f"Лучшая стоимость: {result.best_cost:.6f}")
+print(f"Время выполнения: {result.elapsed_time:.2f} с")
+
+# Сохранение результатов в JSON
+json_path = save_results_to_json(result, "c351595", Path("results"), config)
+print(f"Результаты сохранены в: {json_path}")
+```
+
+### Сравнение адаптивного и неадаптивного алгоритмов
+
+```bash
+python3 compare_algorithms.py \
+    --model c351595 \
+    --iterations 1500 \
+    --population 120 \
+    --output results
+```
+
+Скрипт создаст три JSON файла:
+- `{model}_adaptive_{timestamp}.json` - результаты адаптивного алгоритма
+- `{model}_nonadaptive_{timestamp}.json` - результаты неадаптивного алгоритма
+- `{model}_comparison_{timestamp}.json` - сравнение результатов
+
+## Структура JSON результатов
+
+Каждая итерация содержит:
+- `best_cost` - лучшая стоимость на данной итерации
+- `contribution_rate` - вклад каждого оператора в топ-популяцию
+- `lambda_values` - текущие значения адаптивных лямбд для каждого оператора
+- `delta_values` - средние дельта-значения (улучшения) для каждого оператора
+
+## Параметры адаптивности
+
+- `adaptive_epsilon` (по умолчанию 1e-5): Малое значение для предотвращения деления на ноль
+- `adaptive_alpha` (по умолчанию 0.01): Скорость обучения (шаг обновления лямбд)
+- `adaptive_lambda_min` (по умолчанию 0.4): Минимальное значение лямбды
+- `adaptive_lambda_max` (по умолчанию 1.5): Максимальное значение лямбды
+
+## Тестирование
+
+```bash
+PYTHONPATH=.:../GEA_GQAP_Python python3 -m pytest tests/ -v
+```
+
+## Как работает адаптивность
+
+1. **Инициализация**: Все лямбды начинаются с 1.0
+2. **Оценка эффективности**: После каждой итерации вычисляется среднее дельта (улучшение) для каждого оператора
+3. **Обновление лямбд**: `lambda_new = lambda_old + alpha * delta_avg`
+4. **Масштабирование операций**: Количество операций каждого типа умножается на соответствующую лямбду
+
+Если оператор показывает хорошие результаты (положительное дельта), его лямбда увеличивается, и он используется чаще. Если результаты плохие, лямбда уменьшается.
+
+## Структура проекта
+
+```
+gea_gqap_adaptive_python/
+├── gea_gqap_adaptive_python/
+│   ├── __init__.py
+│   ├── algorithm_adaptive.py    # Адаптивный алгоритм
+│   ├── models.py                 # Модели данных
+│   ├── operators.py              # Операторы (кроссовер, мутация)
+│   ├── heuristics.py             # Эвристики инициализации
+│   ├── utils.py                  # Утилиты (оценка, создание Xij)
+│   └── model_loader.py           # Загрузка MATLAB датасетов
+├── tests/
+│   └── test_adaptive_algorithm.py # Тесты
+├── results/                      # Результаты (JSON файлы)
+├── compare_algorithms.py         # Скрипт сравнения
+└── README.md
+```
+
+## Сравнение с неадаптивной версией
+
+Адаптивная версия находится в `gea_gqap_adaptive_python/`, неадаптивная - в `GEA_GQAP_Python/`.
+
+Основные отличия:
+- Адаптивная версия динамически изменяет количество операций на основе их эффективности
+- Сохраняет историю лямбд и дельта-значений для анализа
+- Может лучше адаптироваться к специфике конкретной задачи
+
+
+
+
+
+
+

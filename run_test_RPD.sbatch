@@ -26,4 +26,4 @@ export RPD_TIME_LIMIT=1000
 module load Python
 source activate gea_gqap_env
 
-poetry run python gea_gqap_adaptive_python/tests/RPD/run_rpd_tune_all_sheets.py
+poetry run python tests/RPD/run_rpd_tune_all_sheets.py

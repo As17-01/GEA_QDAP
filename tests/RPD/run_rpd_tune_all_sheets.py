@@ -100,7 +100,7 @@ def _rpd_utils():
     """Импорт из каталога этого скрипта (работает и с poetry run, и с python3 из RPD/)."""
     if str(TEST_DIR) not in sys.path:
         sys.path.insert(0, str(TEST_DIR))
-    from rpd_utils import mepfm, pick_uniform, rpd_matlab  # noqa: PLC0415
+    from tests.RPD.rpd_utils import mepfm, pick_uniform, rpd_matlab  # noqa: PLC0415
 
     return mepfm, pick_uniform, rpd_matlab
 

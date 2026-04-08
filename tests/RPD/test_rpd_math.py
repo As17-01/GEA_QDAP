@@ -5,7 +5,7 @@ import numpy as np
 try:
     from .rpd_utils import rpd_matlab  # when run as a module
 except Exception:  # pragma: no cover
-    from rpd_utils import rpd_matlab  # when run as a script
+    from tests.RPD.rpd_utils import rpd_matlab  # when run as a script
 
 
 class TestRPDMath(unittest.TestCase):
