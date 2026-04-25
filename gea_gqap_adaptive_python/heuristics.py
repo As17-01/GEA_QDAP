@@ -1,71 +1,73 @@
-from __future__ import annotations
-
 import numpy as np
 
-from .models import Individual, Model
-from .utils import evaluate_permutation
+from gea_gqap_adaptive_python.models import Individual, Model
+from gea_gqap_adaptive_python.utils import evaluate_permutation
 
 
 def heuristic2(model: Model) -> Individual:
-    """
-    Initial solution + repair. Matches MATLAB Heuristic2.m exactly:
-    - CT(i,j) = cij(i,j) + sum(DIS(i,:)) + sum(F(j,:))
-    - For each job j: pick facility b = argmin CT(:,j); if count(b)<=bi(b) assign, else
-      mask CT(b,j), recompute b, try again (up to 3 attempts, then force assign).
-    - Then cascading repair while min(cvar)<0.
-    """
     I, J = model.I, model.J
+
     X = np.zeros((I, J), dtype=int)
-    count = np.zeros(I, dtype=float)
+    load = np.zeros(I, dtype=float)
 
-    CT = np.zeros((I, J), dtype=float)
-    for i in range(I):
-        for j in range(J):
-            CT[i, j] = model.cij[i, j] + model.DIS[i].sum() + model.F[j].sum()
+    # Precompute CT
+    dis_sum = model.DIS.sum(axis=1)
+    f_sum = model.F.sum(axis=1)
 
+    CT = model.cij + dis_sum[:, None] + f_sum[None, :]
+
+    # Initial assignment
     for j in range(J):
-        b = int(np.argmin(CT[:, j]))
-        if count[b] <= model.bi[b]:
-            X[b, j] = 1
-            count[b] += model.aij[b, j]
-        else:
-            ct_max = float(np.max(CT))
-            CT[b, j] = ct_max
-            b = int(np.argmin(CT[:, j]))
-            if count[b] <= model.bi[b]:
-                X[b, j] = 1
-                count[b] += model.aij[b, j]
-            else:
-                CT[b, j] = ct_max
-                b = int(np.argmin(CT[:, j]))
-                X[b, j] = 1
-                count[b] += model.aij[b, j]
+        col = CT[:, j]
 
-    # Repair feasibility (MATLAB-style cascading repair)
-    cvar = model.bi - count
+        for attempt in range(3):
+            i = int(np.argmin(col))
+
+            if load[i] <= model.bi[i]:
+                X[i, j] = 1
+                load[i] += model.aij[i, j]
+                break
+
+            col[i] = col.max()
+
+        else:
+            i = int(np.argmin(col))
+            X[i, j] = 1
+            load[i] += model.aij[i, j]
+
+    # Repair phase
+    slack = model.bi - load
     Wij = X * model.aij
-    max_repair_passes = I * J
-    repair_pass = 0
-    while np.any(cvar < -1e-9) and repair_pass < max_repair_passes:
-        repair_pass += 1
+
+    max_passes = I * J
+    passes = 0
+
+    while np.any(slack < -1e-9) and passes < max_passes:
+        passes += 1
+
         for i in range(I):
-            while cvar[i] < -1e-9:
-                assigned_jobs = np.where(X[i] == 1)[0]
-                if assigned_jobs.size == 0:
+            while slack[i] < -1e-9:
+                jobs = np.where(X[i] == 1)[0]
+                if jobs.size == 0:
                     break
-                b = assigned_jobs[np.argmax(Wij[i, assigned_jobs])]
-                count[i] -= model.aij[i, b]
-                cvar[i] = model.bi[i] - count[i]
-                X[i, b] = 0
-                Wij[i, b] = 0
-                d = int(np.argmin(model.aij[:, b]))
-                if d == i:
-                    d = int(np.argmax(cvar))
-                count[d] += model.aij[d, b]
-                cvar[d] = model.bi[d] - count[d]
-                X[d, b] = 1
-                Wij[d, b] = model.aij[d, b]
+
+                j = jobs[np.argmax(Wij[i, jobs])]
+
+                load[i] -= model.aij[i, j]
+                slack[i] = model.bi[i] - load[i]
+
+                X[i, j] = 0
+                Wij[i, j] = 0
+
+                target = int(np.argmin(model.aij[:, j]))
+                if target == i:
+                    target = int(np.argmax(slack))
+
+                load[target] += model.aij[target, j]
+                slack[target] = model.bi[target] - load[target]
+
+                X[target, j] = 1
+                Wij[target, j] = model.aij[target, j]
 
     permutation = np.argmax(X, axis=0)
     return evaluate_permutation(permutation, model)
-
