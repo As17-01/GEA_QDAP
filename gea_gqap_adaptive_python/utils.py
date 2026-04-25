@@ -11,6 +11,8 @@ def create_xij(permutation: np.ndarray, model: Model) -> np.ndarray:
     xij[permutation, job_indices] = 1
     return xij
 
+def get_unfeasibility_fine(capacity_slack):
+    return float("inf")
 
 def cost_function_perm(
     permutation: np.ndarray, model: Model
@@ -24,15 +26,15 @@ def cost_function_perm(
     )
 
     capacity_slack = model.bi - loads
-    if np.any(capacity_slack < 0):
-        return float("inf"), capacity_slack
-
     assignment_cost = model.cij[permutation, job_indices].sum()
 
     distance_matrix = model.DIS[np.ix_(permutation, permutation)]
     interaction_cost = np.sum(distance_matrix * model.F)
 
     total_cost = float(assignment_cost + interaction_cost)
+    if np.any(capacity_slack < 0):
+        unfeasibility_fine = get_unfeasibility_fine(capacity_slack)
+        return unfeasibility_fine + total_cost, capacity_slack
     return total_cost, capacity_slack
 
 
@@ -41,15 +43,15 @@ def cost_function(xij: np.ndarray, model: Model) -> Tuple[float, np.ndarray]:
 
     loads = (model.aij * x).sum(axis=1)
     capacity_slack = model.bi - loads
-    if np.any(capacity_slack < 0):
-        return float("inf"), capacity_slack
-
     assignment_cost = np.sum(model.cij * x)
 
     temp = np.einsum("ij,ik,kl->jl", x, model.DIS, x)
     interaction_cost = np.sum(temp * model.F)
 
     total_cost = float(assignment_cost + interaction_cost)
+    if np.any(capacity_slack < 0):
+        unfeasibility_fine = get_unfeasibility_fine(capacity_slack)
+        return unfeasibility_fine + total_cost, capacity_slack
     return total_cost, capacity_slack
 
 
