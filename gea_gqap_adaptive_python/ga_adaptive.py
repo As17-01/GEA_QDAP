@@ -1,12 +1,17 @@
 import json
 import math
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Sequence, Tuple, Union
 
 import numpy as np
 
+from gea_gqap_adaptive_python.ga_core import (
+    build_pool,
+    compute_selection_probabilities,
+    initialize_population,
+    update_best,
+)
 from gea_gqap_adaptive_python.heuristics import heuristic2
 from gea_gqap_adaptive_python.models import (
     AdaptiveAlgorithmConfig,
@@ -51,22 +56,27 @@ def _select_population_dedupe(
     """
     seen: set = set()
     unique_list: List[Tuple[Individual, str]] = []
+
     for ind, origin in pool:
         key = tuple(ind.permutation.tolist())
         if key not in seen:
             seen.add(key)
             unique_list.append((ind, origin))
+
     if len(unique_list) >= population_size:
         unique_list.sort(key=lambda x: x[0].cost)
         pop = [ind for ind, _ in unique_list[:population_size]]
         origins = [o for _, o in unique_list[:population_size]]
         return pop, origins
+
     best_ind = min(unique_list, key=lambda x: x[0].cost)[0]
+
     while len(unique_list) < population_size:
         new_perm = mutation(best_ind.permutation, model, rng)
         new_ind = evaluate_permutation(new_perm, model)
         if math.isfinite(new_ind.cost):
             unique_list.append((new_ind, "fill"))
+
     unique_list.sort(key=lambda x: x[0].cost)
     pop = [ind for ind, _ in unique_list[:population_size]]
     origins = [o for _, o in unique_list[:population_size]]
@@ -88,40 +98,25 @@ def run_adaptive_ga(
 
     start_time = time.perf_counter()
 
-    # Параметры адаптивности
     epsilon = cfg.adaptive_epsilon
     alpha = cfg.adaptive_alpha
     lambda_min = cfg.adaptive_lambda_min
     lambda_max = cfg.adaptive_lambda_max
 
-    # Инициализация адаптивных лямбд
     lambda_crossover = 1.0
     lambda_mutation = 1.0
     lambda_scenario1 = 1.0
     lambda_scenario2 = 1.0
     lambda_scenario3 = 1.0
 
-    # Базовые количества операций
     base_ncrossover = int(2 * round((cfg.crossover_rate * cfg.population_size) / 2))
     base_nmutation = int(math.floor(cfg.mutation_rate * cfg.population_size))
     base_ncrossover_scenario = int(math.floor(cfg.scenario_crossover_rate * (cfg.p_scenario3 * cfg.population_size)))
     base_nmutate_scenario = int(math.floor(cfg.scenario_mutation_rate * (cfg.p_scenario3 * cfg.population_size)))
 
-    # Общее базовое количество операций (для сохранения постоянной суммы)
     base_total_operations = base_ncrossover + base_nmutation + base_ncrossover_scenario + base_nmutate_scenario
 
-    # Инициализация популяции
-    population: List[Individual] = []
-    best_solution = heuristic2(model)
-    population.append(best_solution)
-
-    while len(population) < cfg.population_size:
-        mutated = mutation(population[0].permutation, model, rng)
-        individual = evaluate_permutation(mutated, model)
-        if math.isfinite(individual.cost):
-            population.append(individual)
-
-    population.sort(key=lambda ind: ind.cost)
+    population = initialize_population(model, cfg.population_size, rng)
     best_solution = population[0]
     worst_cost = population[-1].cost
     beta = 10.0
@@ -132,22 +127,16 @@ def run_adaptive_ga(
         n_pop = len(population)
         if n_pop == 0:
             break
-        costs = np.array([ind.cost for ind in population], dtype=float)
-        probabilities = np.exp(-beta * costs / worst_cost)
-        probabilities /= probabilities.sum()
 
-        # Адаптивные количества операций (пропорциональное распределение)
-        # Вычисляем взвешенные базовые значения
+        probabilities = compute_selection_probabilities(population, beta, worst_cost)
+
         weighted_crossover = base_ncrossover * lambda_crossover
         weighted_mutation = base_nmutation * lambda_mutation
         weighted_scenario1 = base_ncrossover_scenario * lambda_scenario1
         weighted_scenario2 = base_nmutate_scenario * lambda_scenario2
 
-        # Вычисляем сумму взвешенных значений
         total_weighted = weighted_crossover + weighted_mutation + weighted_scenario1 + weighted_scenario2
 
-        # Нормализуем так, чтобы сумма оставалась равной базовой сумме
-        # Это сохраняет общее количество операций постоянным, меняя только пропорции
         if total_weighted > 0:
             normalization_factor = base_total_operations / total_weighted
             ncrossover = int(weighted_crossover * normalization_factor)
@@ -155,13 +144,11 @@ def run_adaptive_ga(
             ncrossover_scenario = int(weighted_scenario1 * normalization_factor)
             nmutate_scenario = int(weighted_scenario2 * normalization_factor)
         else:
-            # Fallback на базовые значения, если все веса нулевые
             ncrossover = base_ncrossover
             nmutation = base_nmutation
             ncrossover_scenario = base_ncrossover_scenario
             nmutate_scenario = base_nmutate_scenario
 
-        # Счетчики дельта для каждого оператора
         crossover_delta_sum = 0.0
         crossover_count = 0
         mutation_delta_sum = 0.0
@@ -176,7 +163,6 @@ def run_adaptive_ga(
         offspring: List[Individual] = []
         crossover_origins: List[str] = []
 
-        # Кроссовер
         for _ in range(0, ncrossover, 2):
             i1 = roulette_wheel_selection(probabilities, rng)
             i2 = roulette_wheel_selection(probabilities, rng)
@@ -187,7 +173,6 @@ def run_adaptive_ga(
             child1 = evaluate_permutation(child_perm1, model)
             child2 = evaluate_permutation(child_perm2, model)
 
-            # Согласно статье: для кроссовера используем минимум потомков как f(Snew)
             valid_children = []
             if math.isfinite(child1.cost):
                 offspring.append(child1)
@@ -198,22 +183,21 @@ def run_adaptive_ga(
                 crossover_origins.append("crossover")
                 valid_children.append(child2.cost)
 
-            # Вычисляем один delta для пары потомков (минимум потомков vs минимум родителей)
             if valid_children:
                 min_offspring_cost = min(valid_children)
                 delta = (better_parent_cost - min_offspring_cost) / (better_parent_cost + epsilon)
                 crossover_delta_sum += delta
                 crossover_count += 1
 
-        # Мутация
         mutations: List[Individual] = []
         mutation_origins: List[str] = []
+
         for _ in range(nmutation):
             idx = rng.integers(0, n_pop)
             parent = population[idx]
             parent_cost = parent.cost
 
-            mutated_perm = mutation(population[idx].permutation, model, rng)
+            mutated_perm = mutation(parent.permutation, model, rng)
             mutated_individual = evaluate_permutation(mutated_perm, model)
 
             if math.isfinite(mutated_individual.cost):
@@ -223,7 +207,6 @@ def run_adaptive_ga(
                 mutation_delta_sum += delta
                 mutation_count += 1
 
-        # Сценарии
         scenario_candidates: List[Individual] = []
         scenario_origins: List[str] = []
 
@@ -232,7 +215,6 @@ def run_adaptive_ga(
             p_scenario2_count = min(max(1, int(cfg.p_scenario2 * cfg.population_size)), n_pop)
             p_scenario3_count = min(max(1, int(cfg.p_scenario3 * cfg.population_size)), n_pop)
 
-            # Сценарий 1: Кроссовер с доминантной хромосомой
             if cfg.enable_scenario[0] and p_scenario1_count >= 2 and ncrossover_scenario > 0:
                 _, _, dominant_individual, _ = analyze_perm(population[:p_scenario1_count], cfg, model, rng)
                 dominant_cost = dominant_individual.cost
@@ -242,7 +224,6 @@ def run_adaptive_ga(
                     parents = (dominant_individual, population[idx])
                     child_perm1, child_perm2 = crossover(parents, rng)
 
-                    # Согласно статье: для кроссовера используем минимум потомков как f(Snew)
                     valid_children = []
                     for perm in (child_perm1, child_perm2):
                         child = evaluate_permutation(perm, model)
@@ -251,14 +232,12 @@ def run_adaptive_ga(
                             scenario_origins.append("scenario")
                             valid_children.append(child.cost)
 
-                    # Вычисляем один delta для пары потомков (минимум потомков vs доминантный родитель)
                     if valid_children:
                         min_offspring_cost = min(valid_children)
                         delta = (dominant_cost - min_offspring_cost) / (dominant_cost + epsilon)
                         scenario1_delta_sum += delta
                         scenario1_count += 1
 
-            # Сценарий 2: Направленная мутация
             if cfg.enable_scenario[1] and p_scenario2_count >= 1 and nmutate_scenario > 0:
                 _, mask_matrix, _, _ = analyze_perm(population[:p_scenario2_count], cfg, model, rng)
                 mask_slice = mask_matrix[:p_scenario2_count]
@@ -270,7 +249,7 @@ def run_adaptive_ga(
 
                     mutated_perm = mask_mutation(
                         cfg.mask_mutation_index,
-                        population[ii].permutation,
+                        parent.permutation,
                         mask_slice[ii],
                         model,
                         rng,
@@ -284,7 +263,6 @@ def run_adaptive_ga(
                         scenario2_delta_sum += delta
                         scenario2_count += 1
 
-            # Сценарий 3: Инъекция генов
             if cfg.enable_scenario[2] and p_scenario3_count >= 1 and nmutate_scenario > 0:
                 _, _, dominant_individual, dominant_mask = analyze_perm(population[:p_scenario3_count], cfg, model, rng)
                 tail_indices = np.arange(max(0, n_pop - p_scenario3_count), n_pop)
@@ -295,7 +273,9 @@ def run_adaptive_ga(
                     parent_cost = parent.cost
 
                     combined_perm = combine_q(
-                        dominant_individual.permutation, population[jj].permutation, dominant_mask
+                        dominant_individual.permutation,
+                        parent.permutation,
+                        dominant_mask,
                     )
                     child = evaluate_permutation(combined_perm, model)
 
@@ -306,13 +286,16 @@ def run_adaptive_ga(
                         scenario3_delta_sum += delta
                         scenario3_count += 1
 
-        # Объединение и селекция
-        pool = list(zip(population, ["previous"] * len(population)))
-        pool.extend(zip(offspring, crossover_origins))
-        pool.extend(zip(mutations, mutation_origins))
-        pool.extend(zip(scenario_candidates, scenario_origins))
+        pool = build_pool(
+            population,
+            offspring,
+            mutations,
+            scenario_candidates,
+            crossover_origins,
+            mutation_origins,
+            scenario_origins,
+        )
 
-        pool.sort(key=lambda item: item[0].cost)
         if getattr(cfg, "deduplicate", False):
             population, top_origins = _select_population_dedupe(
                 pool,
@@ -324,9 +307,9 @@ def run_adaptive_ga(
             population = [ind for ind, _ in pool[: cfg.population_size]]
             top_origins = [origin for _, origin in pool[: cfg.population_size]]
 
-        # Статистика вклада (fill считаем как mutation)
         total = len(top_origins)
         n_mut = top_origins.count("mutation") + top_origins.count("fill")
+
         stats.contribution_rate.append(
             (
                 top_origins.count("previous") / total if total else 0.0,
@@ -338,28 +321,22 @@ def run_adaptive_ga(
 
         population.sort(key=lambda ind: ind.cost)
         worst_cost = max(worst_cost, population[-1].cost)
-
-        if population[0].cost < best_solution.cost:
-            best_solution = population[0]
+        best_solution = update_best(population, best_solution)
 
         stats.best_cost_trace.append(best_solution.cost)
 
-        # Вычисление средних дельта для статистики и обновление лямбд
-        # Согласно формуле 2 из статьи: λt+1_i = λt_i + α · (Σj ∆t_j) - используется СУММА
         crossover_delta_avg = crossover_delta_sum / max(crossover_count, 1)
         mutation_delta_avg = mutation_delta_sum / max(mutation_count, 1)
         scenario1_delta_avg = scenario1_delta_sum / max(scenario1_count, 1)
         scenario2_delta_avg = scenario2_delta_sum / max(scenario2_count, 1)
         scenario3_delta_avg = scenario3_delta_sum / max(scenario3_count, 1)
 
-        # Обновление лямбд использует СУММУ дельта (согласно формуле 2)
         lambda_crossover = _update_lambda(lambda_crossover, crossover_delta_sum, alpha, lambda_min, lambda_max)
         lambda_mutation = _update_lambda(lambda_mutation, mutation_delta_sum, alpha, lambda_min, lambda_max)
         lambda_scenario1 = _update_lambda(lambda_scenario1, scenario1_delta_sum, alpha, lambda_min, lambda_max)
         lambda_scenario2 = _update_lambda(lambda_scenario2, scenario2_delta_sum, alpha, lambda_min, lambda_max)
         lambda_scenario3 = _update_lambda(lambda_scenario3, scenario3_delta_sum, alpha, lambda_min, lambda_max)
 
-        # Сохранение истории лямбд и дельта
         stats.lambda_history.append(
             (lambda_crossover, lambda_mutation, lambda_scenario1, lambda_scenario2, lambda_scenario3)
         )
@@ -371,6 +348,7 @@ def run_adaptive_ga(
             break
 
     elapsed = time.perf_counter() - start_time
+
     return AdaptiveAlgorithmResult(
         best_cost=best_solution.cost,
         best_individual=best_solution,
