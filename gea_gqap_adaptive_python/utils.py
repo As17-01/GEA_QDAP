@@ -1,55 +1,68 @@
-from __future__ import annotations
-
-from dataclasses import replace
 from typing import Tuple
 
 import numpy as np
 
-from .models import Individual, Model
+from gea_gqap_adaptive_python.models import Individual, Model
 
 
 def create_xij(permutation: np.ndarray, model: Model) -> np.ndarray:
-    """X[i,j]=1 iff job j is assigned to facility i. Matches MATLAB CreateXij: xij(p(j),j)=1."""
-    x = np.zeros((model.I, model.J), dtype=int)
-    x[permutation, np.arange(model.J)] = 1
-    return x
+    xij = np.zeros((model.I, model.J), dtype=int)
+    job_indices = np.arange(model.J)
+    xij[permutation, job_indices] = 1
+    return xij
 
 
-def cost_function_perm(permutation: np.ndarray, model: Model) -> Tuple[float, np.ndarray]:
-    """
-    Cost and capacity slack from permutation. Matches MATLAB CostFunction.m:
-    c1 = sum_ij cij(i,j)*X(i,j), c2 = sum_ijkl F(j,l)*DIS(i,k)*X(i,j)*X(k,l).
-    O(J + J^2) by using permutation directly.
-    """
-    j_idx = np.arange(model.J)
-    loads = np.bincount(permutation, weights=model.aij[permutation, j_idx], minlength=model.I)
-    cvar = model.bi - loads
-    if np.any(cvar < 0):
-        return float("inf"), cvar
+def cost_function_perm(
+    permutation: np.ndarray, model: Model
+) -> Tuple[float, np.ndarray]:
+    job_indices = np.arange(model.J)
 
-    c1 = float(model.cij[permutation, j_idx].sum())
-    c2 = float(np.sum(model.DIS[np.ix_(permutation, permutation)] * model.F))
-    return c1 + c2, cvar
+    loads = np.bincount(
+        permutation,
+        weights=model.aij[permutation, job_indices],
+        minlength=model.I,
+    )
+
+    capacity_slack = model.bi - loads
+    if np.any(capacity_slack < 0):
+        return float("inf"), capacity_slack
+
+    assignment_cost = model.cij[permutation, job_indices].sum()
+
+    distance_matrix = model.DIS[np.ix_(permutation, permutation)]
+    interaction_cost = np.sum(distance_matrix * model.F)
+
+    total_cost = float(assignment_cost + interaction_cost)
+    return total_cost, capacity_slack
 
 
-def cost_function(x: np.ndarray, model: Model) -> Tuple[float, np.ndarray]:
-    """Cost from assignment matrix X. Same formula as CostFunction.m: c1 + c2, c2 = sum F(j,l)*DIS(i,k)*X(i,j)*X(k,l)."""
-    x_float = x.astype(float, copy=False)
-    loads = (model.aij * x_float).sum(axis=1)
-    cvar = model.bi - loads
-    if np.any(cvar < 0):
-        return float("inf"), cvar
+def cost_function(xij: np.ndarray, model: Model) -> Tuple[float, np.ndarray]:
+    x = xij.astype(float, copy=False)
 
-    c1 = float(np.sum(model.cij * x_float))
-    temp = np.einsum("ij,ik,kl->jl", x_float, model.DIS, x_float)
-    c2 = float(np.sum(temp * model.F))
-    return c1 + c2, cvar
+    loads = (model.aij * x).sum(axis=1)
+    capacity_slack = model.bi - loads
+    if np.any(capacity_slack < 0):
+        return float("inf"), capacity_slack
+
+    assignment_cost = np.sum(model.cij * x)
+
+    temp = np.einsum("ij,ik,kl->jl", x, model.DIS, x)
+    interaction_cost = np.sum(temp * model.F)
+
+    total_cost = float(assignment_cost + interaction_cost)
+    return total_cost, capacity_slack
 
 
 def evaluate_permutation(permutation: np.ndarray, model: Model) -> Individual:
-    x = create_xij(permutation, model)
-    cost, cvar = cost_function_perm(permutation, model)
-    return Individual(permutation=permutation.copy(), xij=x, cost=cost, cvar=cvar)
+    xij = create_xij(permutation, model)
+    cost, capacity_slack = cost_function_perm(permutation, model)
+
+    return Individual(
+        permutation=permutation.copy(),
+        xij=xij,
+        cost=cost,
+        cvar=capacity_slack,
+    )
 
 
 def clone_individual(individual: Individual) -> Individual:
@@ -59,4 +72,3 @@ def clone_individual(individual: Individual) -> Individual:
         cost=individual.cost,
         cvar=individual.cvar.copy(),
     )
-
