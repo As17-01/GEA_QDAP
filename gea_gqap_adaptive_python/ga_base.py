@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math
 import time
 from dataclasses import dataclass
@@ -7,9 +5,9 @@ from typing import Iterable, List, Sequence, Tuple
 
 import numpy as np
 
-from .heuristics import heuristic2
-from .models import AlgorithmConfig, AlgorithmResult, AlgorithmStats, Individual, Model
-from .operators import (
+from gea_gqap_adaptive_python.heuristics import heuristic2
+from gea_gqap_adaptive_python.models import AlgorithmConfig, AlgorithmResult, AlgorithmStats, Individual, Model
+from gea_gqap_adaptive_python.operators import (
     analyze_perm,
     combine_q,
     crossover,
@@ -17,7 +15,7 @@ from .operators import (
     mutation,
     roulette_wheel_selection,
 )
-from .utils import evaluate_permutation
+from gea_gqap_adaptive_python.utils import evaluate_permutation
 
 
 DEFAULT_INSTRUCTION = (True, True, True)
