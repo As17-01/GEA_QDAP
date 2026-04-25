@@ -17,7 +17,6 @@ from gea_gqap_adaptive_python.operators import (
 )
 from gea_gqap_adaptive_python.utils import evaluate_permutation
 
-
 DEFAULT_INSTRUCTION = (True, True, True)
 
 
@@ -43,12 +42,8 @@ def run_ga(
     ncrossover = int(2 * round((cfg.crossover_rate * cfg.population_size) / 2))
     nmutation = int(math.floor(cfg.mutation_rate * cfg.population_size))
 
-    ncrossover_scenario = int(
-        math.floor(cfg.scenario_crossover_rate * (cfg.p_scenario3 * cfg.population_size))
-    )
-    nmutate_scenario = int(
-        math.floor(cfg.scenario_mutation_rate * (cfg.p_scenario3 * cfg.population_size))
-    )
+    ncrossover_scenario = int(math.floor(cfg.scenario_crossover_rate * (cfg.p_scenario3 * cfg.population_size)))
+    nmutate_scenario = int(math.floor(cfg.scenario_mutation_rate * (cfg.p_scenario3 * cfg.population_size)))
 
     population: List[Individual] = []
     best_solution = heuristic2(model)
@@ -111,9 +106,7 @@ def run_ga(
             p_scenario3_count = min(max(1, int(cfg.p_scenario3 * cfg.population_size)), n_pop)
 
             if instruction_tuple[0] and p_scenario1_count >= 2 and ncrossover_scenario > 0:
-                _, _, dominant_individual, _ = analyze_perm(
-                    population[:p_scenario1_count], cfg, model, rng
-                )
+                _, _, dominant_individual, _ = analyze_perm(population[:p_scenario1_count], cfg, model, rng)
                 for _ in range(ncrossover_scenario):
                     idx = roulette_wheel_selection(probabilities, rng)
                     parents = (dominant_individual, population[idx])
@@ -125,9 +118,7 @@ def run_ga(
                             scenario_origins.append("scenario")
 
             if instruction_tuple[1] and p_scenario2_count >= 1 and nmutate_scenario > 0:
-                _, mask_matrix, _, _ = analyze_perm(
-                    population[:p_scenario2_count], cfg, model, rng
-                )
+                _, mask_matrix, _, _ = analyze_perm(population[:p_scenario2_count], cfg, model, rng)
                 mask_slice = mask_matrix[:p_scenario2_count]
                 for _ in range(nmutate_scenario):
                     ii = int(rng.integers(0, p_scenario2_count))
@@ -144,9 +135,7 @@ def run_ga(
                         scenario_origins.append("scenario")
 
             if instruction_tuple[2] and p_scenario3_count >= 1 and nmutate_scenario > 0:
-                _, _, dominant_individual, dominant_mask = analyze_perm(
-                    population[:p_scenario3_count], cfg, model, rng
-                )
+                _, _, dominant_individual, dominant_mask = analyze_perm(population[:p_scenario3_count], cfg, model, rng)
                 tail_indices = np.arange(max(0, n_pop - p_scenario3_count), n_pop)
                 for _ in range(nmutate_scenario):
                     jj = int(rng.choice(tail_indices))
@@ -196,4 +185,3 @@ def run_ga(
         stats=stats,
         elapsed_time=elapsed,
     )
-

@@ -6,9 +6,10 @@
 """
 
 import json
-from pathlib import Path
-from typing import Dict, List, Any, Tuple
 import sys
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
 
 TEST_DIR = Path(__file__).parent
@@ -113,7 +114,14 @@ def plot_dataset_all_models(
             style = TYPE_STYLE.get(tk, {"label": tk, "color": "gray", "linestyle": "-"})
             if costs:
                 iters = list(range(1, len(costs) + 1))
-                ax.plot(iters, costs, label=style["label"], linewidth=1.5, color=style["color"], linestyle=style["linestyle"])
+                ax.plot(
+                    iters,
+                    costs,
+                    label=style["label"],
+                    linewidth=1.5,
+                    color=style["color"],
+                    linestyle=style["linestyle"],
+                )
                 all_costs_flat.extend(costs)
 
         ax.set_title(model_key, fontsize=11, fontweight="bold")
@@ -126,7 +134,12 @@ def plot_dataset_all_models(
     for j in range(len(model_variants), len(axes)):
         axes[j].axis("off")
 
-    fig.suptitle(f"Cost Evolution: {dataset_name}\n(4 algorithm types, averaged over runs)", fontsize=14, fontweight="bold", y=1.0)
+    fig.suptitle(
+        f"Cost Evolution: {dataset_name}\n(4 algorithm types, averaged over runs)",
+        fontsize=14,
+        fontweight="bold",
+        y=1.0,
+    )
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     out_file = output_dir / f"{dataset_name}_cost_evolution_all_models.png"
     plt.savefig(out_file, dpi=300, bbox_inches="tight")

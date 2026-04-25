@@ -6,9 +6,7 @@ from gea_gqap_adaptive_python.models import AlgorithmConfig, Individual, Model
 from gea_gqap_adaptive_python.utils import evaluate_permutation
 
 
-def roulette_wheel_selection(
-    probabilities: np.ndarray, rng: np.random.Generator
-) -> int:
+def roulette_wheel_selection(probabilities: np.ndarray, rng: np.random.Generator) -> int:
     return int(np.searchsorted(np.cumsum(probabilities), rng.random(), side="right"))
 
 
@@ -16,9 +14,8 @@ def roulette_wheel_selection(
 # Mutation
 # =========================
 
-def mutation(
-    permutation: np.ndarray, model: Model, rng: np.random.Generator
-) -> np.ndarray:
+
+def mutation(permutation: np.ndarray, model: Model, rng: np.random.Generator) -> np.ndarray:
     op = rng.integers(1, 6)
 
     if op == 1:
@@ -63,9 +60,7 @@ def mutation_insertion(permutation: np.ndarray, rng: np.random.Generator) -> np.
     return np.concatenate((permutation[i : j + 1], permutation[:i], permutation[j + 1 :]))
 
 
-def mutation_random(
-    permutation: np.ndarray, model: Model, rng: np.random.Generator
-) -> np.ndarray:
+def mutation_random(permutation: np.ndarray, model: Model, rng: np.random.Generator) -> np.ndarray:
     n = permutation.size
     if n < 2:
         return permutation.copy()
@@ -95,17 +90,14 @@ def mutation_big_swap(permutation: np.ndarray, rng: np.random.Generator) -> np.n
 # Crossover
 # =========================
 
-def crossover(
-    parents: Sequence[Individual], rng: np.random.Generator
-) -> Tuple[np.ndarray, np.ndarray]:
+
+def crossover(parents: Sequence[Individual], rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:
     if rng.integers(1, 3) == 1:
         return crossover_one_point(parents, rng)
     return crossover_two_point(parents, rng)
 
 
-def crossover_one_point(
-    parents: Sequence[Individual], rng: np.random.Generator
-) -> Tuple[np.ndarray, np.ndarray]:
+def crossover_one_point(parents: Sequence[Individual], rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:
     p1, p2 = parents[0].permutation, parents[1].permutation
     n = p1.size
 
@@ -119,9 +111,7 @@ def crossover_one_point(
     )
 
 
-def crossover_two_point(
-    parents: Sequence[Individual], rng: np.random.Generator
-) -> Tuple[np.ndarray, np.ndarray]:
+def crossover_two_point(parents: Sequence[Individual], rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:
     p1, p2 = parents[0].permutation, parents[1].permutation
     n = p1.size
 
@@ -138,6 +128,7 @@ def crossover_two_point(
 # =========================
 # Mask mutation
 # =========================
+
 
 def mask_mutation(
     index: int,
@@ -161,9 +152,7 @@ def _free_indices(mask: np.ndarray) -> np.ndarray:
     return np.where(~mask)[0]
 
 
-def mask_mutation_swap(
-    permutation: np.ndarray, mask: np.ndarray, rng: np.random.Generator
-) -> np.ndarray:
+def mask_mutation_swap(permutation: np.ndarray, mask: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     idx = _free_indices(mask)
     if idx.size <= 1:
         return permutation.copy()
@@ -176,9 +165,7 @@ def mask_mutation_swap(
     return result
 
 
-def mask_mutation_big_swap(
-    permutation: np.ndarray, mask: np.ndarray, rng: np.random.Generator
-) -> np.ndarray:
+def mask_mutation_big_swap(permutation: np.ndarray, mask: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     idx = _free_indices(mask)
     if idx.size <= 1:
         return permutation.copy()
@@ -189,9 +176,7 @@ def mask_mutation_big_swap(
     return result
 
 
-def mask_mutation_inversion(
-    permutation: np.ndarray, mask: np.ndarray, rng: np.random.Generator
-) -> np.ndarray:
+def mask_mutation_inversion(permutation: np.ndarray, mask: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     idx = _free_indices(mask)
     if idx.size <= 1:
         return permutation.copy()
@@ -202,9 +187,7 @@ def mask_mutation_inversion(
     return result
 
 
-def mask_mutation_displacement(
-    permutation: np.ndarray, mask: np.ndarray, rng: np.random.Generator
-) -> np.ndarray:
+def mask_mutation_displacement(permutation: np.ndarray, mask: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     idx = _free_indices(mask)
     if idx.size <= 2:
         return permutation.copy()
@@ -237,6 +220,7 @@ def mask_mutation_perturbation(
 # Analysis
 # =========================
 
+
 def analyze_perm(
     population: Sequence[Individual],
     config: AlgorithmConfig,
@@ -252,9 +236,7 @@ def analyze_perm(
 
     left, right = perms[:, :-1], perms[:, 1:]
 
-    pair_match = (left[:, None, :] == left[None, :, :]) & (
-        right[:, None, :] == right[None, :, :]
-    )
+    pair_match = (left[:, None, :] == left[None, :, :]) & (right[:, None, :] == right[None, :, :])
     pair_count = pair_match.sum(axis=1) - 1
     eligible = pair_count >= n_fixed
 
@@ -285,7 +267,6 @@ def analyze_perm(
 # Combine
 # =========================
 
-def combine_q(
-    position1: np.ndarray, position2: np.ndarray, pattern: np.ndarray
-) -> np.ndarray:
+
+def combine_q(position1: np.ndarray, position2: np.ndarray, pattern: np.ndarray) -> np.ndarray:
     return np.where(pattern.astype(bool), position1, position2)

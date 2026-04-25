@@ -7,7 +7,6 @@ import numpy as np
 
 from gea_gqap_adaptive_python.models import Model
 
-
 DATA_DIR = Path(__file__).resolve().parent.parent / "datasets"
 
 
@@ -25,11 +24,7 @@ def _parse_numeric_sequence(block: str) -> np.ndarray:
 
 
 def _parse_matrix(block: str) -> np.ndarray:
-    rows = [
-        [float(v) for v in _split_numbers(row)]
-        for row in block.strip().split(";")
-        if row.strip()
-    ]
+    rows = [[float(v) for v in _split_numbers(row)] for row in block.strip().split(";") if row.strip()]
     return np.array(rows, dtype=float)
 
 

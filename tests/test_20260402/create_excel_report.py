@@ -7,7 +7,7 @@
 
 import json
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 TEST_DIR = Path(__file__).parent
 
@@ -18,9 +18,9 @@ def load_config() -> Dict[str, Any]:
         return {"model_variants": ["GA", "GEA_1", "GEA_2", "GEA_3", "GEA"], "algorithm_types": []}
     with config_path.open("r", encoding="utf-8") as f:
         cfg = json.load(f)
-    cfg.setdefault("algorithm_types", [
-        "adaptive", "non_adaptive", "adaptive_wo_duplicates", "non_adaptive_wo_duplicates"
-    ])
+    cfg.setdefault(
+        "algorithm_types", ["adaptive", "non_adaptive", "adaptive_wo_duplicates", "non_adaptive_wo_duplicates"]
+    )
     return cfg
 
 
@@ -39,10 +39,14 @@ def load_results(results_dir: Path) -> List[Dict[str, Any]]:
 
 def create_excel_report(results_dir: Path, output_file: Path):
     import pandas as pd
+
     cfg = load_config()
     model_variants = list(cfg.get("model_variants", {}).keys()) or ["GA", "GEA_1", "GEA_2", "GEA_3", "GEA"]
     type_keys = cfg.get("algorithm_types") or [
-        "adaptive", "non_adaptive", "adaptive_wo_duplicates", "non_adaptive_wo_duplicates"
+        "adaptive",
+        "non_adaptive",
+        "adaptive_wo_duplicates",
+        "non_adaptive_wo_duplicates",
     ]
     results = load_results(results_dir)
     if not results:

@@ -79,7 +79,7 @@ def run_adaptive_ga(
 ) -> AdaptiveAlgorithmResult:
     """
     Запускает адаптивный генетический алгоритм для GQAP.
-    
+
     Адаптивность реализована через динамическое обновление лямбд для каждого
     оператора на основе их эффективности (дельта улучшения).
     """
@@ -104,13 +104,9 @@ def run_adaptive_ga(
     # Базовые количества операций
     base_ncrossover = int(2 * round((cfg.crossover_rate * cfg.population_size) / 2))
     base_nmutation = int(math.floor(cfg.mutation_rate * cfg.population_size))
-    base_ncrossover_scenario = int(
-        math.floor(cfg.scenario_crossover_rate * (cfg.p_scenario3 * cfg.population_size))
-    )
-    base_nmutate_scenario = int(
-        math.floor(cfg.scenario_mutation_rate * (cfg.p_scenario3 * cfg.population_size))
-    )
-    
+    base_ncrossover_scenario = int(math.floor(cfg.scenario_crossover_rate * (cfg.p_scenario3 * cfg.population_size)))
+    base_nmutate_scenario = int(math.floor(cfg.scenario_mutation_rate * (cfg.p_scenario3 * cfg.population_size)))
+
     # Общее базовое количество операций (для сохранения постоянной суммы)
     base_total_operations = base_ncrossover + base_nmutation + base_ncrossover_scenario + base_nmutate_scenario
 
@@ -146,10 +142,10 @@ def run_adaptive_ga(
         weighted_mutation = base_nmutation * lambda_mutation
         weighted_scenario1 = base_ncrossover_scenario * lambda_scenario1
         weighted_scenario2 = base_nmutate_scenario * lambda_scenario2
-        
+
         # Вычисляем сумму взвешенных значений
         total_weighted = weighted_crossover + weighted_mutation + weighted_scenario1 + weighted_scenario2
-        
+
         # Нормализуем так, чтобы сумма оставалась равной базовой сумме
         # Это сохраняет общее количество операций постоянным, меняя только пропорции
         if total_weighted > 0:
@@ -238,9 +234,7 @@ def run_adaptive_ga(
 
             # Сценарий 1: Кроссовер с доминантной хромосомой
             if cfg.enable_scenario[0] and p_scenario1_count >= 2 and ncrossover_scenario > 0:
-                _, _, dominant_individual, _ = analyze_perm(
-                    population[:p_scenario1_count], cfg, model, rng
-                )
+                _, _, dominant_individual, _ = analyze_perm(population[:p_scenario1_count], cfg, model, rng)
                 dominant_cost = dominant_individual.cost
 
                 for _ in range(ncrossover_scenario):
@@ -266,9 +260,7 @@ def run_adaptive_ga(
 
             # Сценарий 2: Направленная мутация
             if cfg.enable_scenario[1] and p_scenario2_count >= 1 and nmutate_scenario > 0:
-                _, mask_matrix, _, _ = analyze_perm(
-                    population[:p_scenario2_count], cfg, model, rng
-                )
+                _, mask_matrix, _, _ = analyze_perm(population[:p_scenario2_count], cfg, model, rng)
                 mask_slice = mask_matrix[:p_scenario2_count]
 
                 for _ in range(nmutate_scenario):
@@ -294,12 +286,8 @@ def run_adaptive_ga(
 
             # Сценарий 3: Инъекция генов
             if cfg.enable_scenario[2] and p_scenario3_count >= 1 and nmutate_scenario > 0:
-                _, _, dominant_individual, dominant_mask = analyze_perm(
-                    population[:p_scenario3_count], cfg, model, rng
-                )
-                tail_indices = np.arange(
-                    max(0, n_pop - p_scenario3_count), n_pop
-                )
+                _, _, dominant_individual, dominant_mask = analyze_perm(population[:p_scenario3_count], cfg, model, rng)
+                tail_indices = np.arange(max(0, n_pop - p_scenario3_count), n_pop)
 
                 for _ in range(nmutate_scenario):
                     jj = int(rng.choice(tail_indices))
@@ -327,7 +315,10 @@ def run_adaptive_ga(
         pool.sort(key=lambda item: item[0].cost)
         if getattr(cfg, "deduplicate", False):
             population, top_origins = _select_population_dedupe(
-                pool, cfg.population_size, model, rng,
+                pool,
+                cfg.population_size,
+                model,
+                rng,
             )
         else:
             population = [ind for ind, _ in pool[: cfg.population_size]]
@@ -362,21 +353,11 @@ def run_adaptive_ga(
         scenario3_delta_avg = scenario3_delta_sum / max(scenario3_count, 1)
 
         # Обновление лямбд использует СУММУ дельта (согласно формуле 2)
-        lambda_crossover = _update_lambda(
-            lambda_crossover, crossover_delta_sum, alpha, lambda_min, lambda_max
-        )
-        lambda_mutation = _update_lambda(
-            lambda_mutation, mutation_delta_sum, alpha, lambda_min, lambda_max
-        )
-        lambda_scenario1 = _update_lambda(
-            lambda_scenario1, scenario1_delta_sum, alpha, lambda_min, lambda_max
-        )
-        lambda_scenario2 = _update_lambda(
-            lambda_scenario2, scenario2_delta_sum, alpha, lambda_min, lambda_max
-        )
-        lambda_scenario3 = _update_lambda(
-            lambda_scenario3, scenario3_delta_sum, alpha, lambda_min, lambda_max
-        )
+        lambda_crossover = _update_lambda(lambda_crossover, crossover_delta_sum, alpha, lambda_min, lambda_max)
+        lambda_mutation = _update_lambda(lambda_mutation, mutation_delta_sum, alpha, lambda_min, lambda_max)
+        lambda_scenario1 = _update_lambda(lambda_scenario1, scenario1_delta_sum, alpha, lambda_min, lambda_max)
+        lambda_scenario2 = _update_lambda(lambda_scenario2, scenario2_delta_sum, alpha, lambda_min, lambda_max)
+        lambda_scenario3 = _update_lambda(lambda_scenario3, scenario3_delta_sum, alpha, lambda_min, lambda_max)
 
         # Сохранение истории лямбд и дельта
         stats.lambda_history.append(
@@ -472,4 +453,3 @@ def save_results_to_json(
         json.dump(data, f, indent=2, ensure_ascii=False)
 
     return output_path
-

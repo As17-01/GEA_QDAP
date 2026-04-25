@@ -7,7 +7,7 @@
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 TEST_DIR = Path(__file__).parent
 LOCAL_LIB = TEST_DIR / ".venv_lib"
@@ -67,10 +67,7 @@ def averaged_lambdas_from_runs(adaptive_runs: List[Dict]) -> Dict[str, List[floa
                 for k in LAMBDA_KEYS:
                     sums[k][i] += lv.get(k, 1.0)
                 counts[i] += 1
-    return {
-        k: [sums[k][i] / max(counts[i], 1) for i in range(max_iter)]
-        for k in LAMBDA_KEYS
-    }
+    return {k: [sums[k][i] / max(counts[i], 1) for i in range(max_iter)] for k in LAMBDA_KEYS}
 
 
 def plot_dataset_all_models(
@@ -110,9 +107,12 @@ def plot_dataset_all_models(
             label_prefix = ADAPTIVE_LABELS.get(atk, atk)
             for key in LAMBDA_KEYS:
                 ax.plot(
-                    iters, avg[key],
+                    iters,
+                    avg[key],
                     label=f"{key} ({label_prefix})",
-                    linewidth=1.5, color=COLORS[key], linestyle=linestyle,
+                    linewidth=1.5,
+                    color=COLORS[key],
+                    linestyle=linestyle,
                 )
                 all_vals.extend(avg[key])
 
@@ -134,7 +134,12 @@ def plot_dataset_all_models(
     for j in range(len(model_variants), len(axes)):
         axes[j].axis("off")
 
-    fig.suptitle(f"Evolution of Adaptive Lambdas: {dataset_name}\n(Adaptive vs Adaptive w/o duplicates)", fontsize=14, fontweight="bold", y=1.0)
+    fig.suptitle(
+        f"Evolution of Adaptive Lambdas: {dataset_name}\n(Adaptive vs Adaptive w/o duplicates)",
+        fontsize=14,
+        fontweight="bold",
+        y=1.0,
+    )
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     out_file = output_dir / f"{dataset_name}_lambda_evolution_all_models.png"
     plt.savefig(out_file, dpi=300, bbox_inches="tight")

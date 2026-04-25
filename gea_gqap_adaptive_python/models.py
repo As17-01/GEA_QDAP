@@ -3,10 +3,10 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-
 # =========================
 # Core problem definition
 # =========================
+
 
 @dataclass(frozen=True)
 class Model:
@@ -15,9 +15,9 @@ class Model:
 
     cij: np.ndarray  # (I, J)
     aij: np.ndarray  # (I, J)
-    bi: np.ndarray   # (I,)
+    bi: np.ndarray  # (I,)
     DIS: np.ndarray  # (I, I)
-    F: np.ndarray    # (J, J)
+    F: np.ndarray  # (J, J)
 
     def __post_init__(self) -> None:
         expected_shapes = {
@@ -45,17 +45,19 @@ class Model:
 # Genetic representation
 # =========================
 
+
 @dataclass
 class Individual:
-    permutation: np.ndarray      # (J,)
-    xij: np.ndarray              # (I, J)
+    permutation: np.ndarray  # (J,)
+    xij: np.ndarray  # (I, J)
     cost: float
-    cvar: np.ndarray             # (I,)
+    cvar: np.ndarray  # (I,)
 
 
 # =========================
 # Algorithm configuration
 # =========================
+
 
 @dataclass
 class AlgorithmConfig:
@@ -92,6 +94,7 @@ class AdaptiveAlgorithmConfig(AlgorithmConfig):
 # Statistics
 # =========================
 
+
 @dataclass
 class AlgorithmStats:
     contribution_rate: List[Tuple[float, float, float, float]] = field(default_factory=list)
@@ -107,6 +110,7 @@ class AdaptiveAlgorithmStats(AlgorithmStats):
 # =========================
 # Results
 # =========================
+
 
 @dataclass
 class AlgorithmResult:

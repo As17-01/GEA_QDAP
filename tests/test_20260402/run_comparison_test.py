@@ -15,14 +15,14 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 
 import json
+import statistics
 import sys
-import time
 import threading
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Tuple
-import statistics
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -54,10 +54,11 @@ def _merged_algorithm_for_variant(
         out.update(by_model[model_key])
     return out
 
-from gea_gqap_adaptive_python.models import AdaptiveAlgorithmConfig, AdaptiveAlgorithmResult
+
 from gea_gqap_adaptive_python.ga_adaptive import run_adaptive_ga, save_results_to_json
-from gea_gqap_adaptive_python.model_loader import load_model, list_available_models
-from gea_gqap_adaptive_python.ga_base import run_ga, AlgorithmConfig
+from gea_gqap_adaptive_python.ga_base import AlgorithmConfig, run_ga
+from gea_gqap_adaptive_python.model_loader import list_available_models, load_model
+from gea_gqap_adaptive_python.models import AdaptiveAlgorithmConfig, AdaptiveAlgorithmResult
 
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", 16))
 
@@ -101,8 +102,7 @@ def load_test_config() -> Dict[str, Any]:
         cfg = json.load(f)
     variants = cfg.get("model_variants", {})
     cfg["model_variants_tuple"] = {
-        name: tuple(bool(x) for x in m.get("enable_scenario", [True, True, True]))
-        for name, m in variants.items()
+        name: tuple(bool(x) for x in m.get("enable_scenario", [True, True, True])) for name, m in variants.items()
     }
     cfg.setdefault(
         "algorithm_types",
@@ -129,9 +129,7 @@ POPULATION_SIZE = CONFIG.get("population_size", 350)
 
 
 def _algorithm_for(model_key: str, algo_type: str) -> Dict[str, Any]:
-    return _merged_algorithm_for_variant(
-        ALGORITHM, ALGORITHM_BY_MODEL, ALGORITHM_BY_VARIANT, model_key, algo_type
-    )
+    return _merged_algorithm_for_variant(ALGORITHM, ALGORITHM_BY_MODEL, ALGORITHM_BY_VARIANT, model_key, algo_type)
 
 
 def calculate_statistics(values: List[float]) -> Dict[str, float]:
@@ -293,13 +291,9 @@ def _worker(task: Tuple) -> Tuple[str, str, int, Dict[str, Any] | None, str | No
 
     try:
         if is_adaptive:
-            result = _run_one_adaptive(
-                dataset_name, run_num, model_key, enable_scenario, deduplicate=dedupe
-            )
+            result = _run_one_adaptive(dataset_name, run_num, model_key, enable_scenario, deduplicate=dedupe)
         else:
-            result = _run_one_non_adaptive(
-                dataset_name, run_num, model_key, enable_scenario, deduplicate=dedupe
-            )
+            result = _run_one_non_adaptive(dataset_name, run_num, model_key, enable_scenario, deduplicate=dedupe)
         return (model_key, algo_type, run_num, result, None)
     except Exception as e:
         return (model_key, algo_type, run_num, None, str(e))
@@ -388,9 +382,7 @@ def run_dataset_tests(dataset_name: str, output_dir: Path) -> Dict[str, Any]:
         "time_limit_seconds": float(ALGORITHM.get("time_limit", 1000)),
         "algorithm_types": ALGORITHM_TYPES,
         "parameters_resolved_by_variant": {
-            variant_config_key(mk, at): _algorithm_for(mk, at)
-            for mk in MODEL_VARIANTS
-            for at in ALGORITHM_TYPES
+            variant_config_key(mk, at): _algorithm_for(mk, at) for mk in MODEL_VARIANTS for at in ALGORITHM_TYPES
         },
         "models": models_results,
     }
@@ -484,7 +476,9 @@ def _main_impl(test_dir: Path, results_dir: Path, log_path: Path):
     print(f"[{_ts()}] Типы: {', '.join(ALGORITHM_TYPES)}")
     print(f"[{_ts()}] Модели: {', '.join(MODEL_VARIANTS.keys())}")
     print(f"[{_ts()}] Датасетов: {len(datasets)} (T + c), по {NUM_RUNS} запусков на тип")
-    print(f"[{_ts()}] Итераций (база): {ITERATIONS}, популяция (база): {POPULATION_SIZE}, лимит времени: {time_limit} с")
+    print(
+        f"[{_ts()}] Итераций (база): {ITERATIONS}, популяция (база): {POPULATION_SIZE}, лимит времени: {time_limit} с"
+    )
     if ALGORITHM_BY_VARIANT:
         print(f"[{_ts()}] algorithm_by_variant: {len(ALGORITHM_BY_VARIANT)} ключей", flush=True)
     elif ALGORITHM_BY_MODEL:
@@ -523,9 +517,7 @@ def _main_impl(test_dir: Path, results_dir: Path, log_path: Path):
             "algorithm_by_model": ALGORITHM_BY_MODEL,
             "algorithm_by_variant": ALGORITHM_BY_VARIANT,
             "parameters_resolved_by_variant": {
-                variant_config_key(mk, at): _algorithm_for(mk, at)
-                for mk in MODEL_VARIANTS
-                for at in ALGORITHM_TYPES
+                variant_config_key(mk, at): _algorithm_for(mk, at) for mk in MODEL_VARIANTS for at in ALGORITHM_TYPES
             },
         },
         "datasets": [r["dataset"] for r in all_results],
@@ -544,4 +536,3 @@ def _main_impl(test_dir: Path, results_dir: Path, log_path: Path):
 
 if __name__ == "__main__":
     main()
-

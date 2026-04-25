@@ -11,12 +11,12 @@ def create_xij(permutation: np.ndarray, model: Model) -> np.ndarray:
     xij[permutation, job_indices] = 1
     return xij
 
+
 def get_unfeasibility_fine(capacity_slack):
     return float("inf")
 
-def cost_function_perm(
-    permutation: np.ndarray, model: Model
-) -> Tuple[float, np.ndarray]:
+
+def cost_function_perm(permutation: np.ndarray, model: Model) -> Tuple[float, np.ndarray]:
     job_indices = np.arange(model.J)
 
     loads = np.bincount(
