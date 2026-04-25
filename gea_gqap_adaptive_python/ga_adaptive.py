@@ -2,7 +2,7 @@ import json
 import math
 import time
 from pathlib import Path
-from typing import List, Sequence, Tuple, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 
@@ -12,7 +12,7 @@ from gea_gqap_adaptive_python.ga_core import (
     initialize_population,
     update_best,
 )
-from gea_gqap_adaptive_python.heuristics import heuristic2
+from gea_gqap_adaptive_python.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
 from gea_gqap_adaptive_python.models import (
     AdaptiveAlgorithmConfig,
     AdaptiveAlgorithmResult,
@@ -20,14 +20,8 @@ from gea_gqap_adaptive_python.models import (
     Individual,
     Model,
 )
-from gea_gqap_adaptive_python.operators import (
-    analyze_perm,
-    combine_q,
-    crossover,
-    mask_mutation,
-    mutation,
-    roulette_wheel_selection,
-)
+from gea_gqap_adaptive_python.operators.crossover import choose_crossover
+from gea_gqap_adaptive_python.operators.mutations import choose_mutation
 from gea_gqap_adaptive_python.utils import evaluate_permutation
 
 
@@ -72,7 +66,7 @@ def _select_population_dedupe(
     best_ind = min(unique_list, key=lambda x: x[0].cost)[0]
 
     while len(unique_list) < population_size:
-        new_perm = mutation(best_ind.permutation, model, rng)
+        new_perm = choose_mutation(best_ind.permutation, model, rng)
         new_ind = evaluate_permutation(new_perm, model)
         if math.isfinite(new_ind.cost):
             unique_list.append((new_ind, "fill"))
@@ -169,7 +163,7 @@ def run_adaptive_ga(
             parents = (population[i1], population[i2])
             better_parent_cost = min(population[i1].cost, population[i2].cost)
 
-            child_perm1, child_perm2 = crossover(parents, rng)
+            child_perm1, child_perm2 = choose_crossover(parents, rng)
             child1 = evaluate_permutation(child_perm1, model)
             child2 = evaluate_permutation(child_perm2, model)
 
@@ -197,7 +191,7 @@ def run_adaptive_ga(
             parent = population[idx]
             parent_cost = parent.cost
 
-            mutated_perm = mutation(parent.permutation, model, rng)
+            mutated_perm = choose_mutation(parent.permutation, model, rng)
             mutated_individual = evaluate_permutation(mutated_perm, model)
 
             if math.isfinite(mutated_individual.cost):
@@ -222,7 +216,7 @@ def run_adaptive_ga(
                 for _ in range(ncrossover_scenario):
                     idx = roulette_wheel_selection(probabilities, rng)
                     parents = (dominant_individual, population[idx])
-                    child_perm1, child_perm2 = crossover(parents, rng)
+                    child_perm1, child_perm2 = choose_crossover(parents, rng)
 
                     valid_children = []
                     for perm in (child_perm1, child_perm2):

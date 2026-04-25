@@ -5,7 +5,7 @@ import numpy as np
 
 from gea_gqap_adaptive_python.heuristics import heuristic2
 from gea_gqap_adaptive_python.models import Individual, Model
-from gea_gqap_adaptive_python.operators import mutation
+from gea_gqap_adaptive_python.operators.mutations import choose_mutation
 from gea_gqap_adaptive_python.utils import evaluate_permutation
 
 
@@ -14,8 +14,9 @@ def initialize_population(model: Model, population_size: int, rng: np.random.Gen
     best_solution = heuristic2(model)
     population.append(best_solution)
 
+    ## DO NOT DO THIS. THEY ARE IDENTICAL
     while len(population) < population_size:
-        mutated = mutation(population[0].permutation, model, rng)
+        mutated = choose_mutation(population[0].permutation, model, rng)
         individual = evaluate_permutation(mutated, model)
         if math.isfinite(individual.cost):
             population.append(individual)

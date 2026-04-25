@@ -11,15 +11,10 @@ from gea_gqap_adaptive_python.ga_core import (
     initialize_population,
     update_best,
 )
+from gea_gqap_adaptive_python.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
 from gea_gqap_adaptive_python.models import AlgorithmConfig, AlgorithmResult, AlgorithmStats, Individual, Model
-from gea_gqap_adaptive_python.operators import (
-    analyze_perm,
-    combine_q,
-    crossover,
-    mask_mutation,
-    mutation,
-    roulette_wheel_selection,
-)
+from gea_gqap_adaptive_python.operators.crossover import choose_crossover
+from gea_gqap_adaptive_python.operators.mutations import choose_mutation
 from gea_gqap_adaptive_python.utils import evaluate_permutation
 
 DEFAULT_INSTRUCTION = (True, True, True)
@@ -68,7 +63,7 @@ def run_ga(
             i2 = roulette_wheel_selection(probabilities, rng)
             parents = (population[i1], population[i2])
 
-            child_perm1, child_perm2 = crossover(parents, rng)
+            child_perm1, child_perm2 = choose_crossover(parents, rng)
 
             for perm in (child_perm1, child_perm2):
                 child = evaluate_permutation(perm, model)
@@ -81,7 +76,7 @@ def run_ga(
 
         for _ in range(nmutation):
             idx = rng.integers(0, len(population))
-            perm = mutation(population[idx].permutation, model, rng)
+            perm = choose_mutation(population[idx].permutation, model, rng)
             ind = evaluate_permutation(perm, model)
             if math.isfinite(ind.cost):
                 mutations.append(ind)
@@ -101,7 +96,7 @@ def run_ga(
                 _, _, dominant, _ = analyze_perm(population[:p1], cfg, model, rng)
                 for _ in range(ncrossover_scenario):
                     idx = roulette_wheel_selection(probabilities, rng)
-                    child_perm1, child_perm2 = crossover((dominant, population[idx]), rng)
+                    child_perm1, child_perm2 = choose_crossover((dominant, population[idx]), rng)
                     for perm in (child_perm1, child_perm2):
                         child = evaluate_permutation(perm, model)
                         if math.isfinite(child.cost):
