@@ -42,6 +42,7 @@ def heuristic2(model: Model) -> Individual:
     max_passes = I * J
     passes = 0
 
+    # Try turning off
     while np.any(slack < -1e-9) and passes < max_passes:
         passes += 1
 
