@@ -54,15 +54,10 @@ def _merged_algorithm_for_variant(
         out.update(by_model[model_key])
     return out
 
-
-from gea_gqap_adaptive_python import (
-    AdaptiveAlgorithmConfig,
-    run_adaptive_ga,
-    load_model as load_model_adaptive,
-    list_available_models,
-)
-from gea_gqap_adaptive_python import load_model as load_model_na
-from gea_gqap_adaptive_python.algorithm import run_ga, AlgorithmConfig
+from gea_gqap_adaptive_python.models import AdaptiveAlgorithmConfig, AdaptiveAlgorithmResult
+from gea_gqap_adaptive_python.ga_adaptive import run_adaptive_ga, save_results_to_json
+from gea_gqap_adaptive_python.model_loader import load_model, list_available_models
+from gea_gqap_adaptive_python.ga_base import run_ga, AlgorithmConfig
 
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", 16))
 
@@ -216,7 +211,7 @@ def _run_one_adaptive(
     enable_scenario: Tuple[bool, bool, bool],
     deduplicate: bool,
 ) -> Dict[str, Any]:
-    model = load_model_adaptive(dataset_name)
+    model = load_model(dataset_name)
     config = _make_adaptive_config(model_key, enable_scenario, deduplicate)
     result = run_adaptive_ga(model, config=config)
     iterations_data = []
@@ -272,7 +267,7 @@ def _run_one_non_adaptive(
     enable_scenario: Tuple[bool, bool, bool],
     deduplicate: bool,
 ) -> Dict[str, Any]:
-    model = load_model_na(dataset_name)
+    model = load_model(dataset_name)
     config = _make_non_adaptive_config(model_key, enable_scenario, deduplicate)
     result = run_ga(model, config=config)
     iterations_data = [{"iteration": i + 1, "best_cost": float(c)} for i, c in enumerate(result.stats.best_cost_trace)]
