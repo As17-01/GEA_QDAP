@@ -3,15 +3,15 @@ from __future__ import annotations
 import math
 import time
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 
+from src.algos.heuristics import heuristic2
+from src.algos.utils import evaluate_permutation
 from src.data.models import Individual, Model
-from src.heuristics import heuristic2
 from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
-from src.utils import evaluate_permutation
 
 
 class BaseGA(ABC):
@@ -55,6 +55,7 @@ class BaseGA(ABC):
     # =========================
     # Operators
     # =========================
+
     def _roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
         return int(np.searchsorted(np.cumsum(probabilities), self.rng.random(), side="right"))
 

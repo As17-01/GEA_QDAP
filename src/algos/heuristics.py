@@ -1,7 +1,7 @@
 import numpy as np
 
+from src.algos.utils import evaluate_permutation
 from src.data.models import Individual, Model
-from src.utils import evaluate_permutation
 
 
 def heuristic2(model: Model) -> Individual:
