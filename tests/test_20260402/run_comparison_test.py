@@ -55,8 +55,8 @@ def _merged_algorithm_for_variant(
     return out
 
 
-from gea_gqap_adaptive_python.ga_adaptive import run_adaptive_ga, save_results_to_json
-from gea_gqap_adaptive_python.ga_base import AlgorithmConfig, run_ga
+from gea_gqap_adaptive_python.algos.ga_adaptive import run_adaptive_ga, save_results_to_json
+from gea_gqap_adaptive_python.algos.ga_base import AlgorithmConfig, run_ga
 from gea_gqap_adaptive_python.model_loader import list_available_models, load_model
 from gea_gqap_adaptive_python.models import AdaptiveAlgorithmConfig, AdaptiveAlgorithmResult
 

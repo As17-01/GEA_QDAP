@@ -6,7 +6,7 @@ from typing import List, Tuple, Union
 
 import numpy as np
 
-from gea_gqap_adaptive_python.ga_core import (
+from gea_gqap_adaptive_python.algos.ga_core import (
     build_pool,
     compute_selection_probabilities,
     initialize_population,

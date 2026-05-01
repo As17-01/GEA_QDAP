@@ -4,7 +4,7 @@ from typing import List, Sequence, Tuple
 
 import numpy as np
 
-from gea_gqap_adaptive_python.ga_core import (
+from gea_gqap_adaptive_python.algos.ga_core import (
     build_pool,
     compute_contribution,
     compute_selection_probabilities,
