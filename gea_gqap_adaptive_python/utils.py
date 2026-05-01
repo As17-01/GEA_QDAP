@@ -2,7 +2,7 @@ from typing import Tuple
 
 import numpy as np
 
-from gea_gqap_adaptive_python.models import Individual, Model
+from gea_gqap_adaptive_python.data.models import Individual, Model
 
 
 def create_xij(permutation: np.ndarray, model: Model) -> np.ndarray:

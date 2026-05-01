@@ -12,7 +12,7 @@ from gea_gqap_adaptive_python.algos.ga_core import (
     update_best,
 )
 from gea_gqap_adaptive_python.operators.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
-from gea_gqap_adaptive_python.models import AlgorithmConfig, AlgorithmResult, AlgorithmStats, Individual, Model
+from gea_gqap_adaptive_python.data.models import AlgorithmConfig, AlgorithmResult, AlgorithmStats, Individual, Model
 from gea_gqap_adaptive_python.operators.crossover import choose_crossover
 from gea_gqap_adaptive_python.operators.mutations import choose_mutation
 from gea_gqap_adaptive_python.utils import evaluate_permutation

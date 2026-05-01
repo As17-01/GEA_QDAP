@@ -2,7 +2,7 @@ from typing import Sequence, Tuple
 
 import numpy as np
 
-from gea_gqap_adaptive_python.models import Individual
+from gea_gqap_adaptive_python.data.models import Individual
 
 
 def choose_crossover(parents: Sequence[Individual], rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:

@@ -13,7 +13,7 @@ from gea_gqap_adaptive_python.algos.ga_core import (
     update_best,
 )
 from gea_gqap_adaptive_python.operators.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
-from gea_gqap_adaptive_python.models import (
+from gea_gqap_adaptive_python.data.models import (
     AdaptiveAlgorithmConfig,
     AdaptiveAlgorithmResult,
     AdaptiveAlgorithmStats,

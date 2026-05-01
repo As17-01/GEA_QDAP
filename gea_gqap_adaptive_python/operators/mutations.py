@@ -1,6 +1,6 @@
 import numpy as np
 
-from gea_gqap_adaptive_python.models import Model
+from gea_gqap_adaptive_python.data.models import Model
 
 
 def choose_mutation(permutation: np.ndarray, model: Model, rng: np.random.Generator) -> np.ndarray:

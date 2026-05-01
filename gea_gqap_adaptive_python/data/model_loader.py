@@ -5,9 +5,9 @@ from typing import List
 
 import numpy as np
 
-from gea_gqap_adaptive_python.models import Model
+from gea_gqap_adaptive_python.data.models import Model
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "datasets"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "datasets"
 
 
 def list_available_models() -> List[str]:

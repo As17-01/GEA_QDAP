@@ -4,7 +4,7 @@ from typing import List, Tuple
 import numpy as np
 
 from gea_gqap_adaptive_python.heuristics import heuristic2
-from gea_gqap_adaptive_python.models import Individual, Model
+from gea_gqap_adaptive_python.data.models import Individual, Model
 from gea_gqap_adaptive_python.operators.mutations import choose_mutation
 from gea_gqap_adaptive_python.utils import evaluate_permutation
 
