@@ -1,417 +1,63 @@
-import json
-import math
-import time
-from pathlib import Path
-from typing import List, Tuple, Union
-
-import numpy as np
-
-from src.algos.configs import AdaptiveAlgorithmConfig, AdaptiveAlgorithmResult, AdaptiveAlgorithmStats
-from src.algos.ga_core import build_pool, compute_selection_probabilities, initialize_population, update_best
-from src.data.models import Individual, Model
-from src.operators.crossover import choose_crossover
-from src.operators.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
-from src.operators.mutations import choose_mutation
-from src.utils import evaluate_permutation
-
-
-def _update_lambda(
-    current_lambda: float,
-    delta_sum: float,
-    alpha: float,
-    lambda_min: float,
-    lambda_max: float,
-) -> float:
-    """Обновляет значение лямбды на основе суммы дельта (согласно формуле 2 из статьи)."""
-    new_lambda = current_lambda + alpha * delta_sum
-    return max(lambda_min, min(lambda_max, new_lambda))
-
-
-def _select_population_dedupe(
-    pool: List[Tuple[Individual, str]],
-    population_size: int,
-    model: Model,
-    rng: np.random.Generator,
-) -> Tuple[List[Individual], List[str]]:
-    """
-    Из пула отбирает уникальных по генотипу (permutation), при нехватке дозаполняет
-    случайными (мутация от лучшего). Возвращает (population, top_origins).
-    Лимит времени не применяется — дозаполнение всегда выполняется до конца.
-    """
-    seen: set = set()
-    unique_list: List[Tuple[Individual, str]] = []
-
-    for ind, origin in pool:
-        key = tuple(ind.permutation.tolist())
-        if key not in seen:
-            seen.add(key)
-            unique_list.append((ind, origin))
-
-    if len(unique_list) >= population_size:
-        unique_list.sort(key=lambda x: x[0].cost)
-        pop = [ind for ind, _ in unique_list[:population_size]]
-        origins = [o for _, o in unique_list[:population_size]]
-        return pop, origins
-
-    best_ind = min(unique_list, key=lambda x: x[0].cost)[0]
-
-    while len(unique_list) < population_size:
-        new_perm = choose_mutation(best_ind.permutation, model, rng)
-        new_ind = evaluate_permutation(new_perm, model)
-        if math.isfinite(new_ind.cost):
-            unique_list.append((new_ind, "fill"))
-
-    unique_list.sort(key=lambda x: x[0].cost)
-    pop = [ind for ind, _ in unique_list[:population_size]]
-    origins = [o for _, o in unique_list[:population_size]]
-    return pop, origins
-
-
-def run_adaptive_ga(
-    model: Model,
-    config: AdaptiveAlgorithmConfig | None = None,
-) -> AdaptiveAlgorithmResult:
-    """
-    Запускает адаптивный генетический алгоритм для GQAP.
-
-    Адаптивность реализована через динамическое обновление лямбд для каждого
-    оператора на основе их эффективности (дельта улучшения).
-    """
-    cfg = config or AdaptiveAlgorithmConfig()
-    rng = np.random.default_rng()
-
-    start_time = time.perf_counter()
-
-    epsilon = cfg.adaptive_epsilon
-    alpha = cfg.adaptive_alpha
-    lambda_min = cfg.adaptive_lambda_min
-    lambda_max = cfg.adaptive_lambda_max
-
-    lambda_crossover = 1.0
-    lambda_mutation = 1.0
-    lambda_scenario1 = 1.0
-    lambda_scenario2 = 1.0
-    lambda_scenario3 = 1.0
-
-    base_ncrossover = int(2 * round((cfg.crossover_rate * cfg.population_size) / 2))
-    base_nmutation = int(math.floor(cfg.mutation_rate * cfg.population_size))
-    base_ncrossover_scenario = int(math.floor(cfg.scenario_crossover_rate * (cfg.p_scenario3 * cfg.population_size)))
-    base_nmutate_scenario = int(math.floor(cfg.scenario_mutation_rate * (cfg.p_scenario3 * cfg.population_size)))
-
-    base_total_operations = base_ncrossover + base_nmutation + base_ncrossover_scenario + base_nmutate_scenario
-
-    population = initialize_population(model, cfg.population_size, rng)
-    best_solution = population[0]
-    worst_cost = population[-1].cost
-    beta = 10.0
-
-    stats = AdaptiveAlgorithmStats()
-
-    for iteration in range(cfg.iterations):
-        n_pop = len(population)
-        if n_pop == 0:
-            break
-
-        probabilities = compute_selection_probabilities(population, beta, worst_cost)
-
-        weighted_crossover = base_ncrossover * lambda_crossover
-        weighted_mutation = base_nmutation * lambda_mutation
-        weighted_scenario1 = base_ncrossover_scenario * lambda_scenario1
-        weighted_scenario2 = base_nmutate_scenario * lambda_scenario2
-
-        total_weighted = weighted_crossover + weighted_mutation + weighted_scenario1 + weighted_scenario2
-
-        if total_weighted > 0:
-            normalization_factor = base_total_operations / total_weighted
-            ncrossover = int(weighted_crossover * normalization_factor)
-            nmutation = int(weighted_mutation * normalization_factor)
-            ncrossover_scenario = int(weighted_scenario1 * normalization_factor)
-            nmutate_scenario = int(weighted_scenario2 * normalization_factor)
-        else:
-            ncrossover = base_ncrossover
-            nmutation = base_nmutation
-            ncrossover_scenario = base_ncrossover_scenario
-            nmutate_scenario = base_nmutate_scenario
-
-        crossover_delta_sum = 0.0
-        crossover_count = 0
-        mutation_delta_sum = 0.0
-        mutation_count = 0
-        scenario1_delta_sum = 0.0
-        scenario1_count = 0
-        scenario2_delta_sum = 0.0
-        scenario2_count = 0
-        scenario3_delta_sum = 0.0
-        scenario3_count = 0
-
-        offspring: List[Individual] = []
-        crossover_origins: List[str] = []
-
-        for _ in range(0, ncrossover, 2):
-            i1 = roulette_wheel_selection(probabilities, rng)
-            i2 = roulette_wheel_selection(probabilities, rng)
-            parents = (population[i1], population[i2])
-            better_parent_cost = min(population[i1].cost, population[i2].cost)
-
-            child_perm1, child_perm2 = choose_crossover(parents, rng)
-            child1 = evaluate_permutation(child_perm1, model)
-            child2 = evaluate_permutation(child_perm2, model)
-
-            valid_children = []
-            if math.isfinite(child1.cost):
-                offspring.append(child1)
-                crossover_origins.append("crossover")
-                valid_children.append(child1.cost)
-            if math.isfinite(child2.cost):
-                offspring.append(child2)
-                crossover_origins.append("crossover")
-                valid_children.append(child2.cost)
-
-            if valid_children:
-                min_offspring_cost = min(valid_children)
-                delta = (better_parent_cost - min_offspring_cost) / (better_parent_cost + epsilon)
-                crossover_delta_sum += delta
-                crossover_count += 1
-
-        mutations: List[Individual] = []
-        mutation_origins: List[str] = []
-
-        for _ in range(nmutation):
-            idx = rng.integers(0, n_pop)
-            parent = population[idx]
-            parent_cost = parent.cost
-
-            mutated_perm = choose_mutation(parent.permutation, model, rng)
-            mutated_individual = evaluate_permutation(mutated_perm, model)
-
-            if math.isfinite(mutated_individual.cost):
-                mutations.append(mutated_individual)
-                mutation_origins.append("mutation")
-                delta = (parent_cost - mutated_individual.cost) / (parent_cost + epsilon)
-                mutation_delta_sum += delta
-                mutation_count += 1
-
-        scenario_candidates: List[Individual] = []
-        scenario_origins: List[str] = []
-
-        if any(cfg.enable_scenario):
-            p_scenario1_count = min(max(1, int(cfg.p_scenario1 * cfg.population_size)), n_pop)
-            p_scenario2_count = min(max(1, int(cfg.p_scenario2 * cfg.population_size)), n_pop)
-            p_scenario3_count = min(max(1, int(cfg.p_scenario3 * cfg.population_size)), n_pop)
-
-            if cfg.enable_scenario[0] and p_scenario1_count >= 2 and ncrossover_scenario > 0:
-                _, _, dominant_individual, _ = analyze_perm(population[:p_scenario1_count], cfg, model, rng)
-                dominant_cost = dominant_individual.cost
-
-                for _ in range(ncrossover_scenario):
-                    idx = roulette_wheel_selection(probabilities, rng)
-                    parents = (dominant_individual, population[idx])
-                    child_perm1, child_perm2 = choose_crossover(parents, rng)
-
-                    valid_children = []
-                    for perm in (child_perm1, child_perm2):
-                        child = evaluate_permutation(perm, model)
-                        if math.isfinite(child.cost):
-                            scenario_candidates.append(child)
-                            scenario_origins.append("scenario")
-                            valid_children.append(child.cost)
-
-                    if valid_children:
-                        min_offspring_cost = min(valid_children)
-                        delta = (dominant_cost - min_offspring_cost) / (dominant_cost + epsilon)
-                        scenario1_delta_sum += delta
-                        scenario1_count += 1
-
-            if cfg.enable_scenario[1] and p_scenario2_count >= 1 and nmutate_scenario > 0:
-                _, mask_matrix, _, _ = analyze_perm(population[:p_scenario2_count], cfg, model, rng)
-                mask_slice = mask_matrix[:p_scenario2_count]
-
-                for _ in range(nmutate_scenario):
-                    ii = int(rng.integers(0, p_scenario2_count))
-                    parent = population[ii]
-                    parent_cost = parent.cost
-
-                    mutated_perm = mask_mutation(
-                        cfg.mask_mutation_index,
-                        parent.permutation,
-                        mask_slice[ii],
-                        model,
-                        rng,
-                    )
-                    child = evaluate_permutation(mutated_perm, model)
-
-                    if math.isfinite(child.cost):
-                        scenario_candidates.append(child)
-                        scenario_origins.append("scenario")
-                        delta = (parent_cost - child.cost) / (parent_cost + epsilon)
-                        scenario2_delta_sum += delta
-                        scenario2_count += 1
-
-            if cfg.enable_scenario[2] and p_scenario3_count >= 1 and nmutate_scenario > 0:
-                _, _, dominant_individual, dominant_mask = analyze_perm(population[:p_scenario3_count], cfg, model, rng)
-                tail_indices = np.arange(max(0, n_pop - p_scenario3_count), n_pop)
-
-                for _ in range(nmutate_scenario):
-                    jj = int(rng.choice(tail_indices))
-                    parent = population[jj]
-                    parent_cost = parent.cost
-
-                    combined_perm = combine_q(
-                        dominant_individual.permutation,
-                        parent.permutation,
-                        dominant_mask,
-                    )
-                    child = evaluate_permutation(combined_perm, model)
-
-                    if math.isfinite(child.cost):
-                        scenario_candidates.append(child)
-                        scenario_origins.append("scenario")
-                        delta = (parent_cost - child.cost) / (parent_cost + epsilon)
-                        scenario3_delta_sum += delta
-                        scenario3_count += 1
-
-        pool = build_pool(
-            population,
-            offspring,
-            mutations,
-            scenario_candidates,
-            crossover_origins,
-            mutation_origins,
-            scenario_origins,
-        )
-
-        if getattr(cfg, "deduplicate", False):
-            population, top_origins = _select_population_dedupe(
-                pool,
-                cfg.population_size,
-                model,
-                rng,
-            )
-        else:
-            population = [ind for ind, _ in pool[: cfg.population_size]]
-            top_origins = [origin for _, origin in pool[: cfg.population_size]]
-
-        total = len(top_origins)
-        n_mut = top_origins.count("mutation") + top_origins.count("fill")
-
-        stats.contribution_rate.append(
-            (
-                top_origins.count("previous") / total if total else 0.0,
-                top_origins.count("crossover") / total if total else 0.0,
-                n_mut / total if total else 0.0,
-                top_origins.count("scenario") / total if total else 0.0,
-            )
-        )
-
-        population.sort(key=lambda ind: ind.cost)
-        worst_cost = max(worst_cost, population[-1].cost)
-        best_solution = update_best(population, best_solution)
-
-        stats.best_cost_trace.append(best_solution.cost)
-
-        crossover_delta_avg = crossover_delta_sum / max(crossover_count, 1)
-        mutation_delta_avg = mutation_delta_sum / max(mutation_count, 1)
-        scenario1_delta_avg = scenario1_delta_sum / max(scenario1_count, 1)
-        scenario2_delta_avg = scenario2_delta_sum / max(scenario2_count, 1)
-        scenario3_delta_avg = scenario3_delta_sum / max(scenario3_count, 1)
-
-        lambda_crossover = _update_lambda(lambda_crossover, crossover_delta_sum, alpha, lambda_min, lambda_max)
-        lambda_mutation = _update_lambda(lambda_mutation, mutation_delta_sum, alpha, lambda_min, lambda_max)
-        lambda_scenario1 = _update_lambda(lambda_scenario1, scenario1_delta_sum, alpha, lambda_min, lambda_max)
-        lambda_scenario2 = _update_lambda(lambda_scenario2, scenario2_delta_sum, alpha, lambda_min, lambda_max)
-        lambda_scenario3 = _update_lambda(lambda_scenario3, scenario3_delta_sum, alpha, lambda_min, lambda_max)
-
-        stats.lambda_history.append(
-            (lambda_crossover, lambda_mutation, lambda_scenario1, lambda_scenario2, lambda_scenario3)
-        )
-        stats.delta_history.append(
-            (crossover_delta_avg, mutation_delta_avg, scenario1_delta_avg, scenario2_delta_avg, scenario3_delta_avg)
-        )
-
-        if cfg.time_limit is not None and (time.perf_counter() - start_time) >= cfg.time_limit:
-            break
-
-    elapsed = time.perf_counter() - start_time
-
-    return AdaptiveAlgorithmResult(
-        best_cost=best_solution.cost,
-        best_individual=best_solution,
-        population=population,
-        stats=stats,
-        elapsed_time=elapsed,
-        adaptive_stats=stats,
-    )
-
-
-def save_results_to_json(
-    result: AdaptiveAlgorithmResult,
-    model_name: str,
-    output_dir: Union[Path, str],
-    config: AdaptiveAlgorithmConfig,
-) -> Path:
-    """
-    Сохраняет результаты адаптивного алгоритма в JSON с метриками по каждой итерации.
-    """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    output_path = output_dir / f"{model_name}_adaptive_{timestamp}.json"
-
-    data = {
-        "model_name": model_name,
-        "config": {
-            "iterations": config.iterations,
-            "population_size": config.population_size,
-            "crossover_rate": config.crossover_rate,
-            "mutation_rate": config.mutation_rate,
-            "adaptive_epsilon": config.adaptive_epsilon,
-            "adaptive_alpha": config.adaptive_alpha,
-            "adaptive_lambda_min": config.adaptive_lambda_min,
-            "adaptive_lambda_max": config.adaptive_lambda_max,
-        },
-        "summary": {
-            "best_cost": float(result.best_cost),
-            "elapsed_time": float(result.elapsed_time),
-            "iterations_completed": len(result.stats.best_cost_trace),
-        },
-        "iterations": [
-            {
-                "iteration": i + 1,
-                "best_cost": float(cost),
-                "contribution_rate": {
-                    "previous": float(contrib[0]),
-                    "crossover": float(contrib[1]),
-                    "mutation": float(contrib[2]),
-                    "scenario": float(contrib[3]),
-                },
-                "lambda_values": {
-                    "crossover": float(lambdas[0]),
-                    "mutation": float(lambdas[1]),
-                    "scenario1": float(lambdas[2]),
-                    "scenario2": float(lambdas[3]),
-                    "scenario3": float(lambdas[4]),
-                },
-                "delta_values": {
-                    "crossover": float(deltas[0]),
-                    "mutation": float(deltas[1]),
-                    "scenario1": float(deltas[2]),
-                    "scenario2": float(deltas[3]),
-                    "scenario3": float(deltas[4]),
-                },
-            }
-            for i, (cost, contrib, lambdas, deltas) in enumerate(
-                zip(
-                    result.stats.best_cost_trace,
-                    result.stats.contribution_rate,
-                    result.adaptive_stats.lambda_history,
-                    result.adaptive_stats.delta_history,
-                )
-            )
-        ],
-    }
-
-    with output_path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-    return output_path
+from src.algos.ga_core import BaseGA
+
+
+class AdaptiveGA(BaseGA):
+    def __init__(
+        self,
+        model,
+        population_size=350,
+        iterations=1000,
+        crossover_rate=0.7,
+        mutation_rate=0.3,
+        alpha=0.01,
+        lambda_min=0.4,
+        lambda_max=1.5,
+        epsilon=1e-5,
+    ):
+        super().__init__(model, population_size, iterations)
+
+        self.base_crossover = crossover_rate
+        self.base_mutation = mutation_rate
+
+        self.lambda_crossover = 1.0
+        self.lambda_mutation = 1.0
+
+        self.alpha = alpha
+        self.lambda_min = lambda_min
+        self.lambda_max = lambda_max
+        self.epsilon = epsilon
+
+    def _update_lambda(self, lam, delta):
+        new_val = lam + self.alpha * delta
+        return max(self.lambda_min, min(self.lambda_max, new_val))
+
+    def step(self) -> None:
+        probs = self.compute_selection_probabilities()
+
+        ncrossover = int(self.base_crossover * self.population_size * self.lambda_crossover)
+        nmutation = int(self.base_mutation * self.population_size * self.lambda_mutation)
+
+        crossover_delta = 0.0
+        mutation_delta = 0.0
+
+        offspring = []
+        for child in self.crossover(probs, ncrossover):
+            parent_cost = self.best_solution.cost
+            delta = (parent_cost - child.cost) / (parent_cost + self.epsilon)
+            crossover_delta += delta
+            offspring.append(child)
+
+        mutations = []
+        for child in self.mutate(nmutation):
+            parent_cost = self.best_solution.cost
+            delta = (parent_cost - child.cost) / (parent_cost + self.epsilon)
+            mutation_delta += delta
+            mutations.append(child)
+
+        self.lambda_crossover = self._update_lambda(self.lambda_crossover, crossover_delta)
+        self.lambda_mutation = self._update_lambda(self.lambda_mutation, mutation_delta)
+
+        pool = self.population + offspring + mutations
+        pool.sort(key=lambda x: x.cost)
+
+        self.population = pool[: self.population_size]

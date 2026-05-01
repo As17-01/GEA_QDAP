@@ -1,68 +1,118 @@
+from __future__ import annotations
+
 import math
+import time
+from abc import ABC, abstractmethod
 from typing import List, Tuple
 
 import numpy as np
 
 from src.data.models import Individual, Model
 from src.heuristics import heuristic2
+from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
 from src.utils import evaluate_permutation
 
 
-def initialize_population(model: Model, population_size: int, rng: np.random.Generator) -> List[Individual]:
-    population: List[Individual] = []
-    best_solution = heuristic2(model)
-    population.append(best_solution)
+class BaseGA(ABC):
+    def __init__(self, model: Model, population_size: int, iterations: int):
+        self.model = model
+        self.population_size = population_size
+        self.iterations = iterations
 
-    ## DO NOT DO THIS. THEY ARE IDENTICAL
-    while len(population) < population_size:
-        mutated = choose_mutation(population[0].permutation, model, rng)
-        individual = evaluate_permutation(mutated, model)
-        if math.isfinite(individual.cost):
-            population.append(individual)
+        self.rng = np.random.default_rng()
+        self.population: List[Individual] = []
+        self.best_solution: Individual | None = None
+        self.worst_cost: float = float("inf")
 
-    population.sort(key=lambda ind: ind.cost)
-    return population
+    # =========================
+    # Initialization
+    # =========================
 
+    def initialize_population(self) -> None:
+        best = heuristic2(self.model)
+        self.population = [best]
 
-def compute_selection_probabilities(population: List[Individual], beta: float, worst_cost: float) -> np.ndarray:
-    costs = np.array([ind.cost for ind in population], dtype=float)
-    probabilities = np.exp(-beta * costs / worst_cost)
-    probabilities /= probabilities.sum()
-    return probabilities
+        while len(self.population) < self.population_size:
+            perm = choose_mutation(best.permutation, self.model, self.rng)
+            ind = evaluate_permutation(perm, self.model)
+            if math.isfinite(ind.cost):
+                self.population.append(ind)
 
+        self.population.sort(key=lambda x: x.cost)
+        self.best_solution = self.population[0]
+        self.worst_cost = self.population[-1].cost
 
-def update_best(population: List[Individual], best_solution: Individual) -> Individual:
-    if population[0].cost < best_solution.cost:
-        return population[0]
-    return best_solution
+    # =========================
+    # Selection
+    # =========================
 
+    def compute_selection_probabilities(self, beta: float = 10.0) -> np.ndarray:
+        costs = np.array([ind.cost for ind in self.population], dtype=float)
+        probs = np.exp(-beta * costs / self.worst_cost)
+        return probs / probs.sum()
 
-def build_pool(
-    population: List[Individual],
-    offspring: List[Individual],
-    mutations: List[Individual],
-    scenario_candidates: List[Individual],
-    crossover_origins: List[str],
-    mutation_origins: List[str],
-    scenario_origins: List[str],
-) -> List[Tuple[Individual, str]]:
-    pool = list(zip(population, ["previous"] * len(population)))
-    pool.extend(zip(offspring, crossover_origins))
-    pool.extend(zip(mutations, mutation_origins))
-    pool.extend(zip(scenario_candidates, scenario_origins))
-    pool.sort(key=lambda item: item[0].cost)
-    return pool
+    # =========================
+    # Operators
+    # =========================
+    def _roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
+        return int(np.searchsorted(np.cumsum(probabilities), self.rng.random(), side="right"))
 
+    def crossover(self, probabilities: np.ndarray, n: int) -> List[Individual]:
+        offspring = []
 
-def compute_contribution(top_origins: List[str]) -> Tuple[float, float, float, float]:
-    total = len(top_origins)
-    if total == 0:
-        return (0.0, 0.0, 0.0, 0.0)
+        for _ in range(0, n, 2):
+            i1 = self._roulette_wheel_selection(probabilities)
+            i2 = self._roulette_wheel_selection(probabilities)
 
-    return (
-        top_origins.count("previous") / total,
-        top_origins.count("crossover") / total,
-        top_origins.count("mutation") / total,
-        top_origins.count("scenario") / total,
-    )
+            p1, p2 = self.population[i1], self.population[i2]
+            perms = choose_crossover((p1, p2), self.rng)
+
+            for perm in perms:
+                child = evaluate_permutation(perm, self.model)
+                if math.isfinite(child.cost):
+                    offspring.append(child)
+
+        return offspring
+
+    def mutate(self, n: int) -> List[Individual]:
+        mutations = []
+
+        for _ in range(n):
+            idx = self.rng.integers(0, len(self.population))
+            perm = choose_mutation(self.population[idx].permutation, self.model, self.rng)
+            ind = evaluate_permutation(perm, self.model)
+
+            if math.isfinite(ind.cost):
+                mutations.append(ind)
+
+        return mutations
+
+    # =========================
+    # Evolution step (customizable)
+    # =========================
+
+    @abstractmethod
+    def step(self) -> None:
+        pass
+
+    # =========================
+    # Run loop
+    # =========================
+
+    def run(self, time_limit: float | None = None):
+        self.initialize_population()
+
+        start = time.perf_counter()
+
+        for _ in range(self.iterations):
+            self.step()
+
+            self.population.sort(key=lambda x: x.cost)
+            self.best_solution = self.population[0]
+            self.worst_cost = max(self.worst_cost, self.population[-1].cost)
+
+            if time_limit and (time.perf_counter() - start) >= time_limit:
+                break
+
+        return self.best_solution
