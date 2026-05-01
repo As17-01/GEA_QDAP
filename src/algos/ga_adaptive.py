@@ -6,23 +6,23 @@ from typing import List, Tuple, Union
 
 import numpy as np
 
-from gea_gqap_adaptive_python.algos.ga_core import (
+from src.algos.ga_core import (
     build_pool,
     compute_selection_probabilities,
     initialize_population,
     update_best,
 )
-from gea_gqap_adaptive_python.operators.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
-from gea_gqap_adaptive_python.data.models import (
+from src.operators.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
+from src.data.models import (
     AdaptiveAlgorithmConfig,
     AdaptiveAlgorithmResult,
     AdaptiveAlgorithmStats,
     Individual,
     Model,
 )
-from gea_gqap_adaptive_python.operators.crossover import choose_crossover
-from gea_gqap_adaptive_python.operators.mutations import choose_mutation
-from gea_gqap_adaptive_python.utils import evaluate_permutation
+from src.operators.crossover import choose_crossover
+from src.operators.mutations import choose_mutation
+from src.utils import evaluate_permutation
 
 
 def _update_lambda(

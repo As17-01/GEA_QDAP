@@ -1,7 +1,7 @@
 import numpy as np
 
-from gea_gqap_adaptive_python.data.models import Individual, Model
-from gea_gqap_adaptive_python.utils import evaluate_permutation
+from src.data.models import Individual, Model
+from src.utils import evaluate_permutation
 
 
 def heuristic2(model: Model) -> Individual:

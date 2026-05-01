@@ -55,10 +55,10 @@ def _merged_algorithm_for_variant(
     return out
 
 
-from gea_gqap_adaptive_python.algos.ga_adaptive import run_adaptive_ga, save_results_to_json
-from gea_gqap_adaptive_python.algos.ga_base import AlgorithmConfig, run_ga
-from gea_gqap_adaptive_python.data.model_loader import list_available_models, load_model
-from gea_gqap_adaptive_python.data.models import AdaptiveAlgorithmConfig, AdaptiveAlgorithmResult
+from src.algos.ga_adaptive import run_adaptive_ga, save_results_to_json
+from src.algos.ga_base import AlgorithmConfig, run_ga
+from src.data.model_loader import list_available_models, load_model
+from src.data.models import AdaptiveAlgorithmConfig, AdaptiveAlgorithmResult
 
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", 16))
 

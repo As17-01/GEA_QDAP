@@ -3,10 +3,10 @@ from typing import List, Tuple
 
 import numpy as np
 
-from gea_gqap_adaptive_python.heuristics import heuristic2
-from gea_gqap_adaptive_python.data.models import Individual, Model
-from gea_gqap_adaptive_python.operators.mutations import choose_mutation
-from gea_gqap_adaptive_python.utils import evaluate_permutation
+from src.heuristics import heuristic2
+from src.data.models import Individual, Model
+from src.operators.mutations import choose_mutation
+from src.utils import evaluate_permutation
 
 
 def initialize_population(model: Model, population_size: int, rng: np.random.Generator) -> List[Individual]:
