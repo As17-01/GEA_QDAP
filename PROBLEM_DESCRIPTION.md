@@ -99,7 +99,7 @@ $$
 Optionally including sequencing costs:
 
 $$
-+ \sum_{j,k} F_{jk} \cdot \text{order interaction}
+\sum_{j,k} F_{jk} \cdot \text{order interaction}
 $$
 
 ---
@@ -111,75 +111,8 @@ Each solution (Individual) contains:
 - `permutation` — ordering of tasks
 - `xij` — assignment matrix
 - `cost` — objective value
+- `hidden_cost` — hidden objective value
 - `cvar` — load/risk per facility
-
----
-
-## Algorithm Configuration
-
-### Core Parameters
-
-- `iterations` — number of generations  
-- `population_size` — number of solutions  
-
----
-
-### Genetic Operators
-
-- `crossover_rate` — probability of crossover  
-- `mutation_rate` — probability of mutation  
-
----
-
-### Scenario-Based Parameters
-
-- `scenario_crossover_rate`  
-- `scenario_mutation_rate`  
-- `enable_scenario` — which strategies are active  
-
----
-
-### Probabilities
-
-- `p_fixed_x` — probability to keep assignment fixed  
-- `p_scenario1`, `p_scenario2`, `p_scenario3` — strategy probabilities  
-
----
-
-### Additional Controls
-
-- `time_limit` — maximum runtime  
-- `deduplicate` — remove duplicate solutions  
-
----
-
-## Adaptive Configuration
-
-Adds:
-
-- `adaptive_alpha` — learning rate  
-- `adaptive_lambda_min`, `adaptive_lambda_max` — bounds  
-- `adaptive_epsilon` — stability threshold  
-
----
-
-## Statistics
-
-- `best_cost_trace` — best cost over time  
-- `contribution_rate` — operator contributions  
-
-Adaptive:
-- `lambda_history`
-- `delta_history`
-
----
-
-## Results
-
-- `best_cost` — best objective value  
-- `best_individual` — best solution  
-- `population` — final population  
-- `elapsed_time` — runtime  
 
 ---
 

@@ -63,6 +63,7 @@ def evaluate_permutation(permutation: np.ndarray, model: Model) -> Individual:
         permutation=permutation.copy(),
         xij=xij,
         cost=cost,
+        hidden_cost=cost,
         cvar=capacity_slack,
     )
 
@@ -72,5 +73,6 @@ def clone_individual(individual: Individual) -> Individual:
         permutation=individual.permutation.copy(),
         xij=individual.xij.copy(),
         cost=individual.cost,
+        hidden_cost=individual.cost,
         cvar=individual.cvar.copy(),
     )

@@ -50,4 +50,5 @@ class Individual:
     permutation: np.ndarray  # (J,)
     xij: np.ndarray  # (I, J)
     cost: float
+    hidden_cost: float
     cvar: np.ndarray  # (I,)
