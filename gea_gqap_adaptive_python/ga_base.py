@@ -11,7 +11,7 @@ from gea_gqap_adaptive_python.ga_core import (
     initialize_population,
     update_best,
 )
-from gea_gqap_adaptive_python.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
+from gea_gqap_adaptive_python.operators.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
 from gea_gqap_adaptive_python.models import AlgorithmConfig, AlgorithmResult, AlgorithmStats, Individual, Model
 from gea_gqap_adaptive_python.operators.crossover import choose_crossover
 from gea_gqap_adaptive_python.operators.mutations import choose_mutation
