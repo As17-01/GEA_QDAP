@@ -2,7 +2,8 @@ from typing import Sequence, Tuple
 
 import numpy as np
 
-from src.data.models import AlgorithmConfig, Individual, Model
+from src.algos.configs import AlgorithmConfig
+from src.data.models import Individual, Model
 from src.utils import evaluate_permutation
 
 

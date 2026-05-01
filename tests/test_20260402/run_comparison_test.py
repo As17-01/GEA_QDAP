@@ -55,10 +55,10 @@ def _merged_algorithm_for_variant(
     return out
 
 
-from src.algos.ga_adaptive import run_adaptive_ga, save_results_to_json
+from src.algos.configs import AdaptiveAlgorithmConfig
+from src.algos.ga_adaptive import run_adaptive_ga
 from src.algos.ga_base import AlgorithmConfig, run_ga
 from src.data.model_loader import list_available_models, load_model
-from src.data.models import AdaptiveAlgorithmConfig, AdaptiveAlgorithmResult
 
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", 16))
 

@@ -3,8 +3,8 @@ from typing import List, Tuple
 
 import numpy as np
 
-from src.heuristics import heuristic2
 from src.data.models import Individual, Model
+from src.heuristics import heuristic2
 from src.operators.mutations import choose_mutation
 from src.utils import evaluate_permutation
 

@@ -4,6 +4,7 @@ from typing import List, Sequence, Tuple
 
 import numpy as np
 
+from src.algos.configs import AlgorithmConfig, AlgorithmResult, AlgorithmStats
 from src.algos.ga_core import (
     build_pool,
     compute_contribution,
@@ -11,9 +12,9 @@ from src.algos.ga_core import (
     initialize_population,
     update_best,
 )
-from src.operators.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
-from src.data.models import AlgorithmConfig, AlgorithmResult, AlgorithmStats, Individual, Model
+from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
+from src.operators.masking import analyze_perm, combine_q, mask_mutation, roulette_wheel_selection
 from src.operators.mutations import choose_mutation
 from src.utils import evaluate_permutation
 
