@@ -60,12 +60,5 @@ class AdaptiveGA(BaseGA):
         self.lambda_crossover = self._update_lambda(self.lambda_crossover, crossover_delta)
         self.lambda_mutation = self._update_lambda(self.lambda_mutation, mutation_delta)
 
-        # Combine pool and remove duplicates
         pool = self.population + offspring + mutations
-
-        # Remove duplicate individuals (using __eq__ and __hash__ from Individual)
-        unique_pool = list(dict.fromkeys(pool))  # Preserves first occurrence order
-
-        # Sort by cost and keep top individuals
-        unique_pool.sort(key=lambda x: x.cost)
-        self.population = unique_pool[: self.population_size]
+        self.select_from_pool(pool)

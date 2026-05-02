@@ -27,10 +27,5 @@ class StandardGA(BaseGA):
         offspring = self.crossover(probs, ncrossover)
         mutations = self.mutate(nmutation)
 
-        # Combine and remove duplicates using set (thanks to __hash__ and __eq__)
         pool = self.population + offspring + mutations
-        unique_pool = list(dict.fromkeys(pool))  # Preserves insertion order
-
-        # Sort by cost and truncate to population size
-        unique_pool.sort(key=lambda x: x.cost)
-        self.population = unique_pool[: self.population_size]
+        self.select_from_pool(pool)
