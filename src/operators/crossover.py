@@ -5,10 +5,10 @@ from numba import njit
 
 from src.data.models import Individual
 
-
 # =========================
 # Numba-accelerated crossovers
 # =========================
+
 
 @njit(fastmath=True, cache=True)
 def crossover_one_point_nb(p1: np.ndarray, p2: np.ndarray, point: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -53,6 +53,7 @@ def crossover_two_point_nb(p1: np.ndarray, p2: np.ndarray, a: int, b: int) -> Tu
 # =========================
 # Public interface
 # =========================
+
 
 def choose_crossover(parents: Sequence[Individual], rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:
     """Choose and perform crossover (still random choice between 1-point and 2-point)."""

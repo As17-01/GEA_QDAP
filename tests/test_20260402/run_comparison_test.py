@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import os
 import json
+import os
 import statistics
 import sys
 from datetime import datetime
@@ -17,10 +17,10 @@ from src.algos.ga_adaptive import AdaptiveGA
 from src.algos.ga_standard import StandardGA
 from src.data.model_loader import list_available_models, load_model
 
-
 # =========================
 # Utils
 # =========================
+
 
 def _ts():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -42,9 +42,9 @@ def calculate_statistics(values: List[float]) -> Dict[str, float]:
 # Single run functions
 # =========================
 
-def run_single_experiment(dataset_name: str, algo_type: str, run_num: int, 
-                         iterations: int, pop_size: int):
-    
+
+def run_single_experiment(dataset_name: str, algo_type: str, run_num: int, iterations: int, pop_size: int):
+
     seed = hash((dataset_name, algo_type, run_num)) & 0x7FFFFFFF
     np.random.seed(seed)
 
@@ -68,6 +68,7 @@ def run_single_experiment(dataset_name: str, algo_type: str, run_num: int,
 # Dataset runner (sequential)
 # =========================
 
+
 def run_dataset_tests(dataset_name: str, iterations: int, pop_size: int, runs: int):
     results = {"standard": [], "adaptive": []}
     errors = 0
@@ -77,10 +78,8 @@ def run_dataset_tests(dataset_name: str, iterations: int, pop_size: int, runs: i
     for algo_type in ["standard", "adaptive"]:
         for r in range(1, runs + 1):
             print(f"     → {algo_type} run {r}/{runs}", end=" ")
-            
-            algo_type, run_num, cost, err = run_single_experiment(
-                dataset_name, algo_type, r, iterations, pop_size
-            )
+
+            algo_type, run_num, cost, err = run_single_experiment(dataset_name, algo_type, r, iterations, pop_size)
 
             if err:
                 errors += 1
@@ -101,6 +100,7 @@ def run_dataset_tests(dataset_name: str, iterations: int, pop_size: int, runs: i
 # =========================
 # Main
 # =========================
+
 
 def main():
     datasets = list_available_models()
@@ -125,8 +125,9 @@ def main():
 
         print(f"   Results:")
         for algo, stats in res["results"].items():
-            print(f"     {algo:10s} | mean={stats['mean']:8.2f} | "
-                  f"min={stats['min']:8.2f} | std={stats['std']:6.2f}")
+            print(
+                f"     {algo:10s} | mean={stats['mean']:8.2f} | " f"min={stats['min']:8.2f} | std={stats['std']:6.2f}"
+            )
 
     # Save results
     out = Path("results.json")
