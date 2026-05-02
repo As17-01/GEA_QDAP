@@ -6,7 +6,8 @@ from typing import List
 
 import numpy as np
 
-from src.algos.utils import evaluate_permutation, timed
+from src.algos.costs import evaluate_permutation
+from src.algos.utils import timed
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
