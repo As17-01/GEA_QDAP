@@ -32,7 +32,7 @@ def get_diversity(
     permutation: np.ndarray,
     population_perms: List[np.ndarray],
     total_cost: float,
-    sample_size: int = 30,
+    sample_size: int = 50,
     min_sample: int = 10,
 ) -> float:
     if not population_perms:

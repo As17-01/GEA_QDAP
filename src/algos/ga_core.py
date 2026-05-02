@@ -129,6 +129,8 @@ class BaseGA(LoggingGA):
         diverse = unique_pool[:n_diverse]
 
         self.population = best + diverse
+        all_perms = [ind.permutation for ind in self.population]
+        self.population = [evaluate_permutation(perm, all_perms, self.model) for perm in all_perms]
 
     @timed("crossover")
     def crossover(self, probabilities: np.ndarray, n: int) -> List[Individual]:

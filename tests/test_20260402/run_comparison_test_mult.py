@@ -5,8 +5,9 @@ import os
 import statistics
 import sys
 from datetime import datetime
+from multiprocessing import Pool, cpu_count
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -39,12 +40,19 @@ def calculate_statistics(values: List[float]) -> Dict[str, float]:
 
 
 # =========================
-# Single run functions
+# Single run
 # =========================
 
 
-def run_single_experiment(dataset_name: str, algo_type: str, run_num: int, iterations: int, pop_size: int):
+def run_single_experiment(
+    dataset_name: str,
+    algo_type: str,
+    run_num: int,
+    iterations: int,
+    pop_size: int,
+) -> Tuple[str, int, float, str]:
 
+    # Deterministic seed per run
     seed = hash((dataset_name, algo_type, run_num)) & 0x7FFFFFFF
     np.random.seed(seed)
 
@@ -53,10 +61,10 @@ def run_single_experiment(dataset_name: str, algo_type: str, run_num: int, itera
 
         if algo_type == "adaptive":
             ga = AdaptiveGA(model, population_size=pop_size, iterations=iterations)
-            best = ga.run()
         else:
             ga = StandardGA(model, population_size=pop_size, iterations=iterations)
-            best = ga.run()
+
+        best = ga.run()
 
         return (algo_type, run_num, best.cost, None)
 
@@ -64,8 +72,12 @@ def run_single_experiment(dataset_name: str, algo_type: str, run_num: int, itera
         return (algo_type, run_num, None, str(e))
 
 
+def run_single_experiment_wrapper(args):
+    return run_single_experiment(*args)
+
+
 # =========================
-# Dataset runner (sequential)
+# Dataset runner (parallel)
 # =========================
 
 
@@ -73,20 +85,29 @@ def run_dataset_tests(dataset_name: str, iterations: int, pop_size: int, runs: i
     results = {"standard": [], "adaptive": []}
     errors = 0
 
-    print(f"   Running {runs} runs for standard + adaptive...")
+    print(f"   Running {runs} runs for standard + adaptive (parallel)...")
 
+    # Build all tasks
+    tasks = []
     for algo_type in ["standard", "adaptive"]:
         for r in range(1, runs + 1):
-            print(f"     → {algo_type} run {r}/{runs}", end=" ")
+            tasks.append((dataset_name, algo_type, r, iterations, pop_size))
 
-            algo_type, run_num, cost, err = run_single_experiment(dataset_name, algo_type, r, iterations, pop_size)
+    # Parallel execution
+    n_proc = max(1, cpu_count() - 1)
+    print(f"   Using {n_proc} processes")
 
-            if err:
-                errors += 1
-                print(f"[ERROR] {err}")
-            else:
-                results[algo_type].append(cost)
-                print(f"→ cost = {cost:.2f}")
+    with Pool(processes=n_proc) as pool:
+        outputs = pool.map(run_single_experiment_wrapper, tasks)
+
+    # Collect results
+    for algo_type, run_num, cost, err in outputs:
+        if err:
+            errors += 1
+            print(f"     → {algo_type} run {run_num} [ERROR] {err}")
+        else:
+            results[algo_type].append(cost)
+            print(f"     → {algo_type} run {run_num} → cost = {cost:.2f}")
 
     stats = {k: calculate_statistics(v) for k, v in results.items()}
 
@@ -111,7 +132,7 @@ def main():
 
     all_results = []
 
-    print(f"[{_ts()}] Starting sequential testing")
+    print(f"[{_ts()}] Starting PARALLEL testing")
     print(f"   Datasets     : {len(datasets)}")
     print(f"   Runs per algo: {RUNS}")
     print(f"   Iterations   : {ITERATIONS}")
