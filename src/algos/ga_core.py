@@ -19,7 +19,7 @@ from src.operators.mutations import choose_mutation
 
 
 def timed(operation_name: str):
-    """Decorator to measure and accumulate time for operations."""
+    """Decorator to measure execution time of operations."""
 
     def decorator(func):
         @wraps(func)
@@ -58,10 +58,16 @@ class BaseGA(ABC):
         self.worst_cost: float = float("inf")
 
         # Timing tracking
-        self._timing: defaultdict = defaultdict(float)
-        self._timing_calls: defaultdict = defaultdict(int)
+        self._timing = defaultdict(float)
+        self._timing_calls = defaultdict(int)
         self._iteration_times: List[float] = []
         self.start_time: float = 0.0
+
+        # Crossover & Mutation statistics
+        self._crossover_attempts = 0
+        self._crossover_valid = 0
+        self._mutation_attempts = 0
+        self._mutation_valid = 0
 
     # =========================
     # Initialization
@@ -92,6 +98,9 @@ class BaseGA(ABC):
         probs = np.exp(-beta * costs / self.worst_cost)
         return probs / probs.sum()
 
+    def _roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
+        return int(np.searchsorted(np.cumsum(probabilities), self.rng.random(), side="right"))
+
     # =========================
     # Operators
     # =========================
@@ -99,6 +108,7 @@ class BaseGA(ABC):
     @timed("crossover")
     def crossover(self, probabilities: np.ndarray, n: int) -> List[Individual]:
         offspring = []
+        self._crossover_attempts += n          # Each requested child = 1 attempt
 
         for _ in range(0, n, 2):
             i1 = self._roulette_wheel_selection(probabilities)
@@ -111,12 +121,14 @@ class BaseGA(ABC):
                 child = evaluate_permutation(perm, self.model)
                 if math.isfinite(child.cost):
                     offspring.append(child)
+                    self._crossover_valid += 1
 
         return offspring
 
     @timed("mutation")
     def mutate(self, n: int) -> List[Individual]:
         mutations = []
+        self._mutation_attempts += n
 
         for _ in range(n):
             idx = self.rng.integers(0, len(self.population))
@@ -125,18 +137,12 @@ class BaseGA(ABC):
 
             if math.isfinite(ind.cost):
                 mutations.append(ind)
+                self._mutation_valid += 1
 
         return mutations
 
     # =========================
-    # Helper Methods
-    # =========================
-
-    def _roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
-        return int(np.searchsorted(np.cumsum(probabilities), self.rng.random(), side="right"))
-
-    # =========================
-    # Evolution step (customizable)
+    # Evolution step (to be implemented in subclasses)
     # =========================
 
     @abstractmethod
@@ -144,14 +150,14 @@ class BaseGA(ABC):
         pass
 
     # =========================
-    # Run loop with logging
+    # Run loop
     # =========================
 
     def run(self, time_limit: float | None = None):
         self.start_time = time.perf_counter()
         self.initialize_population()
 
-        print(f"GA started → Population: {self.population_size:,} | Max iterations: {self.iterations}")
+        print(f"GA started → Population: {self.population_size:,} | Iterations: {self.iterations}\n")
 
         for it in range(1, self.iterations + 1):
             iter_start = time.perf_counter()
@@ -161,17 +167,31 @@ class BaseGA(ABC):
             iter_time = time.perf_counter() - iter_start
             self._iteration_times.append(iter_time)
 
-            # Update best and worst
             self.population.sort(key=lambda x: x.cost)
             self.best_solution = self.population[0]
             self.worst_cost = max(self.worst_cost, self.population[-1].cost)
 
-            # Print best cost every 50 iterations
+            # Logging every 50 iterations
             if it % 50 == 0:
+                cx_rate = (
+                    (self._crossover_valid / self._crossover_attempts * 100) if self._crossover_attempts > 0 else 0.0
+                )
+                mut_rate = (
+                    (self._mutation_valid / self._mutation_attempts * 100) if self._mutation_attempts > 0 else 0.0
+                )
+
                 print(
                     f"Iter {it:5d} | Best cost: {self.best_solution.cost:12.4f} | "
-                    f"Iter time: {iter_time*1000:6.2f} ms"
+                    f"Time: {iter_time*1000:6.2f}ms | "
+                    f"CX: {self._crossover_valid:4d}/{self._crossover_attempts:4d} ({cx_rate:5.1f}%) | "
+                    f"MUT: {self._mutation_valid:4d}/{self._mutation_attempts:4d} ({mut_rate:5.1f}%)"
                 )
+
+                # Reset counters for next block
+                self._crossover_attempts = 0
+                self._crossover_valid = 0
+                self._mutation_attempts = 0
+                self._mutation_valid = 0
 
             if time_limit and (time.perf_counter() - self.start_time) >= time_limit:
                 print(f"Time limit reached at iteration {it}")
@@ -189,18 +209,18 @@ class BaseGA(ABC):
         num_iters = len(self._iteration_times)
         avg_iter = sum(self._iteration_times) / num_iters if num_iters > 0 else 0
 
-        print("\n" + "=" * 70)
+        print("\n" + "=" * 80)
         print("GENETIC ALGORITHM - FINAL REPORT")
-        print("=" * 70)
-        print(f"Total runtime          : {total_time:8.4f} seconds")
-        print(f"Iterations completed   : {num_iters}")
-        print(f"Average time / iteration: {avg_iter*1000:8.2f} ms")
-        print(f"Final best cost        : {self.best_solution.cost:.6f}")
+        print("=" * 80)
+        print(f"Total runtime            : {total_time:8.4f} seconds")
+        print(f"Iterations completed     : {num_iters}")
+        print(f"Average time / iteration : {avg_iter*1000:8.2f} ms")
+        print(f"Final best cost          : {self.best_solution.cost:.6f}")
 
-        print("\nTime breakdown by operation:")
+        print("\nTime breakdown:")
         for op, t in sorted(self._timing.items(), key=lambda x: x[1], reverse=True):
             calls = self._timing_calls[op]
-            avg_time = t / calls if calls > 0 else 0
-            print(f"  {op:20s} : {t:8.4f}s ({calls:5d} calls, {avg_time*1000:6.2f} ms avg)")
+            avg = t / calls if calls > 0 else 0
+            print(f"  {op:18s} : {t:8.4f}s ({calls:5d} calls, {avg*1000:6.2f} ms avg)")
 
-        print("=" * 70)
+        print("=" * 80)
