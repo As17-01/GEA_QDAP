@@ -40,6 +40,7 @@ class AdaptiveGA(BaseGA):
         crossover_delta = 0.0
         mutation_delta = 0.0
 
+        # Generate offspring from crossover
         offspring = []
         for child in self.crossover(probs, ncrossover):
             parent_cost = self.best_solution.cost
@@ -47,6 +48,7 @@ class AdaptiveGA(BaseGA):
             crossover_delta += delta
             offspring.append(child)
 
+        # Generate mutations
         mutations = []
         for child in self.mutate(nmutation):
             parent_cost = self.best_solution.cost
@@ -54,10 +56,16 @@ class AdaptiveGA(BaseGA):
             mutation_delta += delta
             mutations.append(child)
 
+        # Update adaptive parameters
         self.lambda_crossover = self._update_lambda(self.lambda_crossover, crossover_delta)
         self.lambda_mutation = self._update_lambda(self.lambda_mutation, mutation_delta)
 
+        # Combine pool and remove duplicates
         pool = self.population + offspring + mutations
-        pool.sort(key=lambda x: x.cost)
 
-        self.population = pool[: self.population_size]
+        # Remove duplicate individuals (using __eq__ and __hash__ from Individual)
+        unique_pool = list(dict.fromkeys(pool))  # Preserves first occurrence order
+
+        # Sort by cost and keep top individuals
+        unique_pool.sort(key=lambda x: x.cost)
+        self.population = unique_pool[: self.population_size]

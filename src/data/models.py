@@ -52,3 +52,16 @@ class Individual:
     cost: float
     hidden_cost: float
     cvar: np.ndarray  # (I,)
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Individual):
+            return False
+        # Two individuals are equal if they have the same permutation
+        return np.array_equal(self.permutation, other.permutation)
+
+    def __hash__(self) -> int:
+        # Hash based on the permutation (converted to tuple)
+        return hash(tuple(self.permutation))
+
+    def __repr__(self) -> str:
+        return f"Individual(cost={self.cost:.4f})"
