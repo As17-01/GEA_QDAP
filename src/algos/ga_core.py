@@ -12,10 +12,6 @@ from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
 
-# =========================
-# Base Genetic Algorithm
-# =========================
-
 
 class BaseGA(ABC):
     def __init__(self, model: Model, population_size: int, iterations: int):
@@ -34,21 +30,86 @@ class BaseGA(ABC):
         self._iteration_times: List[float] = []
         self.start_time: float = 0.0
 
-        # Crossover & Mutation statistics
+        # Operator statistics
         self._crossover_attempts = 0
         self._crossover_valid = 0
         self._crossover_new_best = 0
+
         self._mutation_attempts = 0
         self._mutation_valid = 0
         self._mutation_new_best = 0
 
-    # =========================
-    # Initialization
-    # =========================
+        self._repair_attempts = 0
+        self._repair_success = 0
+
+    @timed("repair")
+    def repair_permutation(self, perm: np.ndarray, max_repair_attempts: int = 1) -> np.ndarray:
+        """Fast repair with tracking."""
+        self._repair_attempts += 1
+
+        perm = perm.copy()
+        I = self.model.I
+        J = self.model.J
+        aij = self.model.aij
+        bi = self.model.bi
+
+        loads = np.bincount(perm, weights=aij[perm, np.arange(J)], minlength=I)
+        slack = bi - loads
+
+        was_infeasible = np.any(slack < -1e-9)
+
+        attempts = 0
+        while attempts < max_repair_attempts:
+            attempts += 1
+            overloaded = np.where(slack < -1e-9)[0]
+            if len(overloaded) == 0:
+                break
+
+            on_overloaded = np.isin(perm, overloaded)
+            if not np.any(on_overloaded):
+                break
+
+            candidates = np.where(on_overloaded)[0]
+            current_loads = aij[perm[candidates], candidates]
+            j_remove = candidates[np.argmax(current_loads)]
+
+            i_old = perm[j_remove]
+
+            loads[i_old] -= aij[i_old, j_remove]
+            slack[i_old] = bi[i_old] - loads[i_old]
+            perm[j_remove] = -1
+
+            aij_j = aij[:, j_remove]
+            feasible_mask = slack + aij_j <= bi + 1e-9
+
+            if np.any(feasible_mask):
+                target = int(np.argmin(np.where(feasible_mask, aij_j, np.inf)))
+            else:
+                target = int(np.argmax(slack))
+
+            perm[j_remove] = target
+            loads[target] += aij[target, j_remove]
+            slack[target] = bi[target] - loads[target]
+
+        # Final safety
+        if np.any(perm == -1):
+            for j in np.where(perm == -1)[0]:
+                target = int(np.argmax(slack))
+                perm[j] = target
+                loads[target] += aij[target, j]
+                slack[target] = bi[target] - loads[target]
+
+        # Update success counter
+        final_slack = bi - np.bincount(perm, weights=aij[perm, np.arange(J)], minlength=I)
+        if was_infeasible and np.all(final_slack >= -1e-9):
+            self._repair_success += 1
+
+        return perm
 
     @timed("initialization")
     def initialize_population(self) -> None:
         self.population = []
+
         for _ in range(self.population_size):
             perm = self.rng.integers(0, self.model.I, size=self.model.J, dtype=int)
             perm = self.repair_permutation(perm)
@@ -59,80 +120,6 @@ class BaseGA(ABC):
         self.best_solution = self.population[0]
         self.worst_cost = self.population[-1].cost
 
-    # =========================
-    # Fast Repair Algorithm
-    # =========================
-
-    def repair_permutation(self, perm: np.ndarray, max_repair_attempts: int = 100) -> np.ndarray:
-        perm = perm.copy()
-        I = self.model.I
-        J = self.model.J
-        aij = self.model.aij
-        bi = self.model.bi
-
-        # Current loads and slack
-        loads = np.bincount(perm, weights=aij[perm, np.arange(J)], minlength=I)
-        slack = bi - loads
-
-        attempts = 0
-
-        while attempts < max_repair_attempts:
-            attempts += 1
-
-            # Find all overloaded machines
-            overloaded = np.where(slack < -1e-9)[0]
-            if len(overloaded) == 0:
-                break
-
-            # Find all jobs on overloaded machines
-            on_overloaded = np.isin(perm, overloaded)
-            if not np.any(on_overloaded):
-                break
-
-            # Among jobs on overloaded machines, pick the one with largest aij on its current machine
-            candidates = np.where(on_overloaded)[0]
-            current_loads = aij[perm[candidates], candidates]
-            j_remove = candidates[np.argmax(current_loads)]
-
-            i_old = perm[j_remove]
-
-            # Remove temporarily
-            loads[i_old] -= aij[i_old, j_remove]
-            slack[i_old] = bi[i_old] - loads[i_old]
-            perm[j_remove] = -1
-
-            # === Choose best target machine ===
-            aij_j = aij[:, j_remove]
-
-            # Prefer feasible machines with smallest load increase
-            feasible_mask = slack + aij_j <= bi + 1e-9
-
-            if np.any(feasible_mask):
-                costs = np.where(feasible_mask, aij_j, np.inf)
-                target = int(np.argmin(costs))
-            else:
-                # No feasible → go to machine with largest slack
-                target = int(np.argmax(slack))
-
-            # Assign
-            perm[j_remove] = target
-            loads[target] += aij[target, j_remove]
-            slack[target] = bi[target] - loads[target]
-
-        # Final safety pass: force assign remaining if any (very rare)
-        if np.any(perm == -1):
-            for j in np.where(perm == -1)[0]:
-                target = int(np.argmax(slack))
-                perm[j] = target
-                loads[target] += aij[target, j]
-                slack[target] = bi[target] - loads[target]
-
-        return perm
-
-    # =========================
-    # Selection
-    # =========================
-
     @timed("selection")
     def compute_selection_probabilities(self, beta: float = 10.0) -> np.ndarray:
         costs = np.array([ind.cost for ind in self.population], dtype=float)
@@ -141,10 +128,6 @@ class BaseGA(ABC):
 
     def _roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
         return int(np.searchsorted(np.cumsum(probabilities), self.rng.random(), side="right"))
-
-    # =========================
-    # Operators with improved tracking
-    # =========================
 
     @timed("crossover")
     def crossover(self, probabilities: np.ndarray, n: int) -> List[Individual]:
@@ -165,7 +148,6 @@ class BaseGA(ABC):
                 offspring.append(child)
                 if math.isfinite(child.cost):
                     self._crossover_valid += 1
-
                     if child.cost < self.best_solution.cost:
                         self._crossover_new_best += 1
 
@@ -185,23 +167,14 @@ class BaseGA(ABC):
             mutations.append(ind)
             if math.isfinite(ind.cost):
                 self._mutation_valid += 1
-
                 if ind.cost < self.best_solution.cost:
                     self._mutation_new_best += 1
 
         return mutations
 
-    # =========================
-    # Evolution step
-    # =========================
-
     @abstractmethod
     def step(self) -> None:
         pass
-
-    # =========================
-    # Run loop
-    # =========================
 
     def run(self, time_limit: float | None = None):
         self.start_time = time.perf_counter()
@@ -211,9 +184,7 @@ class BaseGA(ABC):
 
         for it in range(1, self.iterations + 1):
             iter_start = time.perf_counter()
-
             self.step()
-
             iter_time = time.perf_counter() - iter_start
             self._iteration_times.append(iter_time)
 
@@ -221,42 +192,34 @@ class BaseGA(ABC):
             self.best_solution = self.population[0]
             self.worst_cost = max(self.worst_cost, self.population[-1].cost)
 
-            # Detailed logging every 50 iterations
             if it % 50 == 0:
                 print(
                     f"Iter {it:5d} | Best: {self.best_solution.cost:12.4f} | "
                     f"Time: {iter_time*1000:6.2f}ms | "
                     f"CX: {self._crossover_new_best:3d}/{self._crossover_valid:5d}/{self._crossover_attempts:5d} | "
-                    f"MUT: {self._mutation_new_best:3d}/{self._mutation_valid:5d}/{self._mutation_attempts:5d}"
+                    f"MUT: {self._mutation_new_best:3d}/{self._mutation_valid:5d}/{self._mutation_attempts:5d} | "
+                    f"REP: {self._repair_success}/{self._repair_attempts}"
                 )
 
-                # Reset counters for next block
-                self._crossover_attempts = 0
-                self._crossover_valid = 0
-                self._crossover_new_best = 0
-                self._mutation_attempts = 0
-                self._mutation_valid = 0
-                self._mutation_new_best = 0
+                # Reset counters
+                self._crossover_attempts = self._crossover_valid = self._crossover_new_best = 0
+                self._mutation_attempts = self._mutation_valid = self._mutation_new_best = 0
+                self._repair_attempts = self._repair_success = 0
 
             if time_limit and (time.perf_counter() - self.start_time) >= time_limit:
-                print(f"Time limit reached at iteration {it}")
                 break
 
         self._print_final_statistics()
         return self.best_solution
-
-    # =========================
-    # Final statistics
-    # =========================
 
     def _print_final_statistics(self):
         total_time = time.perf_counter() - self.start_time
         num_iters = len(self._iteration_times)
         avg_iter = sum(self._iteration_times) / num_iters if num_iters > 0 else 0
 
-        print("\n" + "=" * 90)
+        print("\n" + "=" * 100)
         print("GENETIC ALGORITHM - FINAL REPORT")
-        print("=" * 90)
+        print("=" * 100)
         print(f"Total runtime            : {total_time:8.4f} seconds")
         print(f"Iterations completed     : {num_iters}")
         print(f"Average time / iteration : {avg_iter*1000:8.2f} ms")
@@ -268,4 +231,4 @@ class BaseGA(ABC):
             avg = t / calls if calls > 0 else 0
             print(f"  {op:18s} : {t:8.4f}s ({calls:5d} calls, {avg*1000:6.2f} ms avg)")
 
-        print("=" * 90)
+        print("=" * 100)
