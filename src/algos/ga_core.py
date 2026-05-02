@@ -66,8 +66,10 @@ class BaseGA(ABC):
         # Crossover & Mutation statistics
         self._crossover_attempts = 0
         self._crossover_valid = 0
+        self._crossover_new_best = 0
         self._mutation_attempts = 0
         self._mutation_valid = 0
+        self._mutation_new_best = 0
 
     # =========================
     # Initialization
@@ -102,13 +104,13 @@ class BaseGA(ABC):
         return int(np.searchsorted(np.cumsum(probabilities), self.rng.random(), side="right"))
 
     # =========================
-    # Operators
+    # Operators with improved tracking
     # =========================
 
     @timed("crossover")
     def crossover(self, probabilities: np.ndarray, n: int) -> List[Individual]:
         offspring = []
-        self._crossover_attempts += n          # Each requested child = 1 attempt
+        self._crossover_attempts += n
 
         for _ in range(0, n, 2):
             i1 = self._roulette_wheel_selection(probabilities)
@@ -122,6 +124,10 @@ class BaseGA(ABC):
                 if math.isfinite(child.cost):
                     offspring.append(child)
                     self._crossover_valid += 1
+
+                    # Check if it improves global best
+                    if child.cost < self.best_solution.cost:
+                        self._crossover_new_best += 1
 
         return offspring
 
@@ -139,10 +145,14 @@ class BaseGA(ABC):
                 mutations.append(ind)
                 self._mutation_valid += 1
 
+                # Check if it improves global best
+                if ind.cost < self.best_solution.cost:
+                    self._mutation_new_best += 1
+
         return mutations
 
     # =========================
-    # Evolution step (to be implemented in subclasses)
+    # Evolution step
     # =========================
 
     @abstractmethod
@@ -171,27 +181,22 @@ class BaseGA(ABC):
             self.best_solution = self.population[0]
             self.worst_cost = max(self.worst_cost, self.population[-1].cost)
 
-            # Logging every 50 iterations
+            # Detailed logging every 50 iterations
             if it % 50 == 0:
-                cx_rate = (
-                    (self._crossover_valid / self._crossover_attempts * 100) if self._crossover_attempts > 0 else 0.0
-                )
-                mut_rate = (
-                    (self._mutation_valid / self._mutation_attempts * 100) if self._mutation_attempts > 0 else 0.0
-                )
-
                 print(
-                    f"Iter {it:5d} | Best cost: {self.best_solution.cost:12.4f} | "
+                    f"Iter {it:5d} | Best: {self.best_solution.cost:12.4f} | "
                     f"Time: {iter_time*1000:6.2f}ms | "
-                    f"CX: {self._crossover_valid:4d}/{self._crossover_attempts:4d} ({cx_rate:5.1f}%) | "
-                    f"MUT: {self._mutation_valid:4d}/{self._mutation_attempts:4d} ({mut_rate:5.1f}%)"
+                    f"CX: {self._crossover_new_best:3d}/{self._crossover_valid:5d}/{self._crossover_attempts:5d} | "
+                    f"MUT: {self._mutation_new_best:3d}/{self._mutation_valid:5d}/{self._mutation_attempts:5d}"
                 )
 
                 # Reset counters for next block
                 self._crossover_attempts = 0
                 self._crossover_valid = 0
+                self._crossover_new_best = 0
                 self._mutation_attempts = 0
                 self._mutation_valid = 0
+                self._mutation_new_best = 0
 
             if time_limit and (time.perf_counter() - self.start_time) >= time_limit:
                 print(f"Time limit reached at iteration {it}")
@@ -209,9 +214,9 @@ class BaseGA(ABC):
         num_iters = len(self._iteration_times)
         avg_iter = sum(self._iteration_times) / num_iters if num_iters > 0 else 0
 
-        print("\n" + "=" * 80)
+        print("\n" + "=" * 90)
         print("GENETIC ALGORITHM - FINAL REPORT")
-        print("=" * 80)
+        print("=" * 90)
         print(f"Total runtime            : {total_time:8.4f} seconds")
         print(f"Iterations completed     : {num_iters}")
         print(f"Average time / iteration : {avg_iter*1000:8.2f} ms")
@@ -223,4 +228,4 @@ class BaseGA(ABC):
             avg = t / calls if calls > 0 else 0
             print(f"  {op:18s} : {t:8.4f}s ({calls:5d} calls, {avg*1000:6.2f} ms avg)")
 
-        print("=" * 80)
+        print("=" * 90)
