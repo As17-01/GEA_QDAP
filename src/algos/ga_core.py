@@ -1,110 +1,30 @@
 import math
 import time
-from abc import ABC, abstractmethod
-from collections import defaultdict
+from abc import abstractmethod
 from typing import List
 
 import numpy as np
 
 from src.algos.costs import evaluate_permutation
+from src.algos.ga_logging import LoggingGA
 from src.algos.utils import timed
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
 
 
-class BaseGA(ABC):
+class BaseGA(LoggingGA):
     def __init__(self, model: Model, population_size: int, iterations: int):
+        super().__init__()
         self.model = model
         self.population_size = population_size
         self.iterations = iterations
 
+        # Core GA objects
         self.rng = np.random.default_rng()
         self.population: List[Individual] = []
         self.best_solution: Individual | None = None
         self.worst_cost: float = float("inf")
-
-        # Timing tracking
-        self._timing = defaultdict(float)
-        self._timing_calls = defaultdict(int)
-        self._iteration_times: List[float] = []
-        self.start_time: float = 0.0
-
-        # Operator statistics
-        self._crossover_attempts = 0
-        self._crossover_valid = 0
-        self._crossover_new_best = 0
-
-        self._mutation_attempts = 0
-        self._mutation_valid = 0
-        self._mutation_new_best = 0
-
-        self._repair_attempts = 0
-        self._repair_success = 0
-
-    @timed("repair")
-    def repair_permutation(self, perm: np.ndarray, max_repair_attempts: int = 1) -> np.ndarray:
-        """Fast repair with tracking."""
-        self._repair_attempts += 1
-
-        perm = perm.copy()
-        I = self.model.I
-        J = self.model.J
-        aij = self.model.aij
-        bi = self.model.bi
-
-        loads = np.bincount(perm, weights=aij[perm, np.arange(J)], minlength=I)
-        slack = bi - loads
-
-        was_infeasible = np.any(slack < -1e-9)
-
-        attempts = 0
-        while attempts < max_repair_attempts:
-            attempts += 1
-            overloaded = np.where(slack < -1e-9)[0]
-            if len(overloaded) == 0:
-                break
-
-            on_overloaded = np.isin(perm, overloaded)
-            if not np.any(on_overloaded):
-                break
-
-            candidates = np.where(on_overloaded)[0]
-            current_loads = aij[perm[candidates], candidates]
-            j_remove = candidates[np.argmax(current_loads)]
-
-            i_old = perm[j_remove]
-
-            loads[i_old] -= aij[i_old, j_remove]
-            slack[i_old] = bi[i_old] - loads[i_old]
-            perm[j_remove] = -1
-
-            aij_j = aij[:, j_remove]
-            feasible_mask = slack + aij_j <= bi + 1e-9
-
-            if np.any(feasible_mask):
-                target = int(np.argmin(np.where(feasible_mask, aij_j, np.inf)))
-            else:
-                target = int(np.argmax(slack))
-
-            perm[j_remove] = target
-            loads[target] += aij[target, j_remove]
-            slack[target] = bi[target] - loads[target]
-
-        # Final safety
-        if np.any(perm == -1):
-            for j in np.where(perm == -1)[0]:
-                target = int(np.argmax(slack))
-                perm[j] = target
-                loads[target] += aij[target, j]
-                slack[target] = bi[target] - loads[target]
-
-        # Update success counter
-        final_slack = bi - np.bincount(perm, weights=aij[perm, np.arange(J)], minlength=I)
-        if was_infeasible and np.all(final_slack >= -1e-9):
-            self._repair_success += 1
-
-        return perm
 
     @timed("initialization")
     def initialize_population(self) -> None:
@@ -112,7 +32,6 @@ class BaseGA(ABC):
 
         for _ in range(self.population_size):
             perm = self.rng.integers(0, self.model.I, size=self.model.J, dtype=int)
-            perm = self.repair_permutation(perm)
             ind = evaluate_permutation(perm, self.model)
             self.population.append(ind)
 
@@ -142,7 +61,6 @@ class BaseGA(ABC):
             perms = choose_crossover((p1, p2), self.rng)
 
             for perm in perms:
-                perm = self.repair_permutation(perm)
                 child = evaluate_permutation(perm, self.model)
 
                 offspring.append(child)
@@ -161,7 +79,6 @@ class BaseGA(ABC):
         for _ in range(n):
             idx = self.rng.integers(0, len(self.population))
             perm = choose_mutation(self.population[idx].permutation, self.model, self.rng)
-            perm = self.repair_permutation(perm)
             ind = evaluate_permutation(perm, self.model)
 
             mutations.append(ind)
@@ -193,42 +110,12 @@ class BaseGA(ABC):
             self.worst_cost = max(self.worst_cost, self.population[-1].cost)
 
             if it % 50 == 0:
-                print(
-                    f"Iter {it:5d} | Best: {self.best_solution.cost:12.4f} | "
-                    f"Time: {iter_time*1000:6.2f}ms | "
-                    f"CX: {self._crossover_new_best:3d}/{self._crossover_valid:5d}/{self._crossover_attempts:5d} | "
-                    f"MUT: {self._mutation_new_best:3d}/{self._mutation_valid:5d}/{self._mutation_attempts:5d} | "
-                    f"REP: {self._repair_success}/{self._repair_attempts}"
-                )
-
-                # Reset counters
-                self._crossover_attempts = self._crossover_valid = self._crossover_new_best = 0
-                self._mutation_attempts = self._mutation_valid = self._mutation_new_best = 0
-                self._repair_attempts = self._repair_success = 0
+                self.print_iteration_info(it, iter_time)
+                self.reset_operator_counters()
 
             if time_limit and (time.perf_counter() - self.start_time) >= time_limit:
+                print(f"Time limit reached at iteration {it}")
                 break
 
-        self._print_final_statistics()
+        self.print_final_report()
         return self.best_solution
-
-    def _print_final_statistics(self):
-        total_time = time.perf_counter() - self.start_time
-        num_iters = len(self._iteration_times)
-        avg_iter = sum(self._iteration_times) / num_iters if num_iters > 0 else 0
-
-        print("\n" + "=" * 100)
-        print("GENETIC ALGORITHM - FINAL REPORT")
-        print("=" * 100)
-        print(f"Total runtime            : {total_time:8.4f} seconds")
-        print(f"Iterations completed     : {num_iters}")
-        print(f"Average time / iteration : {avg_iter*1000:8.2f} ms")
-        print(f"Final best cost          : {self.best_solution.cost:.6f}")
-
-        print("\nTime breakdown:")
-        for op, t in sorted(self._timing.items(), key=lambda x: x[1], reverse=True):
-            calls = self._timing_calls[op]
-            avg = t / calls if calls > 0 else 0
-            print(f"  {op:18s} : {t:8.4f}s ({calls:5d} calls, {avg*1000:6.2f} ms avg)")
-
-        print("=" * 100)
