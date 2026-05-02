@@ -2,43 +2,14 @@ import math
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from functools import wraps
 from typing import List
 
 import numpy as np
 
-from src.algos.utils import evaluate_permutation
+from src.algos.utils import evaluate_permutation, timed
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
-
-# =========================
-# Timing Decorator
-# =========================
-
-
-def timed(operation_name: str):
-    """Decorator to measure execution time of operations."""
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            start = time.perf_counter()
-            result = func(self, *args, **kwargs)
-            elapsed = time.perf_counter() - start
-
-            if not hasattr(self, "_timing"):
-                self._timing = defaultdict(float)
-                self._timing_calls = defaultdict(int)
-
-            self._timing[operation_name] += elapsed
-            self._timing_calls[operation_name] += 1
-            return result
-
-        return wrapper
-
-    return decorator
-
 
 # =========================
 # Base Genetic Algorithm
