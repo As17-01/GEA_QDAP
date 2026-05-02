@@ -79,13 +79,83 @@ class BaseGA(ABC):
         self.population = []
         for _ in range(self.population_size):
             perm = self.rng.integers(0, self.model.I, size=self.model.J, dtype=int)
-
+            perm = self.repair_permutation(perm)
             ind = evaluate_permutation(perm, self.model)
             self.population.append(ind)
 
         self.population.sort(key=lambda x: x.cost)
         self.best_solution = self.population[0]
         self.worst_cost = self.population[-1].cost
+
+    # =========================
+    # Fast Repair Algorithm
+    # =========================
+
+    def repair_permutation(self, perm: np.ndarray, max_repair_attempts: int = 100) -> np.ndarray:
+        perm = perm.copy()
+        I = self.model.I
+        J = self.model.J
+        aij = self.model.aij
+        bi = self.model.bi
+
+        # Current loads and slack
+        loads = np.bincount(perm, weights=aij[perm, np.arange(J)], minlength=I)
+        slack = bi - loads
+
+        attempts = 0
+
+        while attempts < max_repair_attempts:
+            attempts += 1
+
+            # Find all overloaded machines
+            overloaded = np.where(slack < -1e-9)[0]
+            if len(overloaded) == 0:
+                break
+
+            # Find all jobs on overloaded machines
+            on_overloaded = np.isin(perm, overloaded)
+            if not np.any(on_overloaded):
+                break
+
+            # Among jobs on overloaded machines, pick the one with largest aij on its current machine
+            candidates = np.where(on_overloaded)[0]
+            current_loads = aij[perm[candidates], candidates]
+            j_remove = candidates[np.argmax(current_loads)]
+
+            i_old = perm[j_remove]
+
+            # Remove temporarily
+            loads[i_old] -= aij[i_old, j_remove]
+            slack[i_old] = bi[i_old] - loads[i_old]
+            perm[j_remove] = -1
+
+            # === Choose best target machine ===
+            aij_j = aij[:, j_remove]
+
+            # Prefer feasible machines with smallest load increase
+            feasible_mask = slack + aij_j <= bi + 1e-9
+
+            if np.any(feasible_mask):
+                costs = np.where(feasible_mask, aij_j, np.inf)
+                target = int(np.argmin(costs))
+            else:
+                # No feasible → go to machine with largest slack
+                target = int(np.argmax(slack))
+
+            # Assign
+            perm[j_remove] = target
+            loads[target] += aij[target, j_remove]
+            slack[target] = bi[target] - loads[target]
+
+        # Final safety pass: force assign remaining if any (very rare)
+        if np.any(perm == -1):
+            for j in np.where(perm == -1)[0]:
+                target = int(np.argmax(slack))
+                perm[j] = target
+                loads[target] += aij[target, j]
+                slack[target] = bi[target] - loads[target]
+
+        return perm
 
     # =========================
     # Selection
@@ -117,12 +187,13 @@ class BaseGA(ABC):
             perms = choose_crossover((p1, p2), self.rng)
 
             for perm in perms:
+                perm = self.repair_permutation(perm)
                 child = evaluate_permutation(perm, self.model)
+
+                offspring.append(child)
                 if math.isfinite(child.cost):
-                    offspring.append(child)
                     self._crossover_valid += 1
 
-                    # Check if it improves global best
                     if child.cost < self.best_solution.cost:
                         self._crossover_new_best += 1
 
@@ -136,13 +207,13 @@ class BaseGA(ABC):
         for _ in range(n):
             idx = self.rng.integers(0, len(self.population))
             perm = choose_mutation(self.population[idx].permutation, self.model, self.rng)
+            perm = self.repair_permutation(perm)
             ind = evaluate_permutation(perm, self.model)
 
+            mutations.append(ind)
             if math.isfinite(ind.cost):
-                mutations.append(ind)
                 self._mutation_valid += 1
 
-                # Check if it improves global best
                 if ind.cost < self.best_solution.cost:
                     self._mutation_new_best += 1
 
