@@ -7,7 +7,6 @@ from typing import List
 
 import numpy as np
 
-from src.algos.heuristics import heuristic2
 from src.algos.utils import evaluate_permutation
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
@@ -77,14 +76,12 @@ class BaseGA(ABC):
 
     @timed("initialization")
     def initialize_population(self) -> None:
-        best = heuristic2(self.model)
-        self.population = [best]
+        self.population = []
+        for _ in range(self.population_size):
+            perm = self.rng.integers(0, self.model.I, size=self.model.J, dtype=int)
 
-        while len(self.population) < self.population_size:
-            perm = choose_mutation(best.permutation, self.model, self.rng)
             ind = evaluate_permutation(perm, self.model)
-            if math.isfinite(ind.cost):
-                self.population.append(ind)
+            self.population.append(ind)
 
         self.population.sort(key=lambda x: x.cost)
         self.best_solution = self.population[0]
