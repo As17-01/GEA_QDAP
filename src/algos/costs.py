@@ -28,21 +28,15 @@ def _hamming_distances_numba(perm: np.ndarray, pop_perms: np.ndarray) -> float:
     return total_dist / pop_size
 
 
-def get_hidden_cost(
+def get_diversity(
     permutation: np.ndarray,
     population_perms: List[np.ndarray],
-    capacity_slack: np.ndarray,
     total_cost: float,
     sample_size: int = 30,
     min_sample: int = 10,
 ) -> float:
-    # === Slack Penalty (larger slack = bigger penalty) ===
-    positive_slack = np.maximum(capacity_slack, 0.0)
-    mean_slack = np.mean(positive_slack)
-    slack_penalty = mean_slack * total_cost
-
     if not population_perms:
-        return float(total_cost + slack_penalty)
+        return float(total_cost)
 
     n_pop = len(population_perms)
     if n_pop <= min_sample:
@@ -59,7 +53,7 @@ def get_hidden_cost(
     diversity_score = avg_hamming / len(permutation)  # 0 = identical, 1 = completely different
     divercity_coef = 1.0 - diversity_score
 
-    return float(total_cost * (1 + divercity_coef) + slack_penalty)
+    return float(divercity_coef)
 
 
 def cost_function_perm(
@@ -79,22 +73,22 @@ def cost_function_perm(
     distance_matrix = model.DIS[np.ix_(permutation, permutation)]
     interaction_cost = np.sum(distance_matrix * model.F)
 
+    total_cost = float(assignment_cost + interaction_cost)
+    diversity = get_diversity(permutation, population_perms, total_cost)
     if np.any(capacity_slack < 0):
-        total_cost = float("inf")
+        return float("inf"), diversity, capacity_slack
     else:
-        total_cost = float(assignment_cost + interaction_cost)
-    hidden_cost = get_hidden_cost(permutation, population_perms, capacity_slack, total_cost)
-    return total_cost, hidden_cost, capacity_slack
+        return total_cost, diversity, capacity_slack
 
 
 def evaluate_permutation(permutation: np.ndarray, population_perms: List[np.ndarray], model: Model) -> Individual:
     xij = create_xij(permutation, model)
-    cost, hidden_cost, capacity_slack = cost_function_perm(permutation, population_perms, model)
+    cost, diversity, capacity_slack = cost_function_perm(permutation, population_perms, model)
 
     return Individual(
         permutation=permutation.copy(),
         xij=xij,
         cost=cost,
-        hidden_cost=hidden_cost,
+        diversity=diversity,
         cvar=capacity_slack,
     )

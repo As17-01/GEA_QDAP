@@ -10,7 +10,7 @@ def clone_individual(individual: Individual) -> Individual:
         permutation=individual.permutation.copy(),
         xij=individual.xij.copy(),
         cost=individual.cost,
-        hidden_cost=individual.cost,
+        diversity=individual.cost,
         cvar=individual.cvar.copy(),
     )
 

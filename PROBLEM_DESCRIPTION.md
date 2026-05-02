@@ -111,7 +111,7 @@ Each solution (Individual) contains:
 - `permutation` — ordering of tasks
 - `xij` — assignment matrix
 - `cost` — objective value
-- `hidden_cost` — hidden objective value
+- `diversity` — hidden objective value
 - `cvar` — load/risk per facility
 
 ---
