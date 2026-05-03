@@ -94,7 +94,7 @@ def run_dataset_tests(dataset_name: str, iterations: int, pop_size: int, runs: i
             tasks.append((dataset_name, algo_type, r, iterations, pop_size))
 
     # Parallel execution
-    n_proc = max(1, cpu_count() - 1)
+    n_proc = 3
     print(f"   Using {n_proc} processes")
 
     with Pool(processes=n_proc) as pool:

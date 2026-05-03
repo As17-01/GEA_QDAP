@@ -47,6 +47,7 @@ class BaseGA(LoggingGA):
         J = self.model.J
         aij = self.model.aij
         bi = self.model.bi
+        rng = self.rng
 
         # Current loads and slack
         loads = np.bincount(perm, weights=aij[perm, np.arange(J)], minlength=I)
@@ -70,7 +71,24 @@ class BaseGA(LoggingGA):
             # Among jobs on overloaded machines, pick the one with largest aij on its current machine
             candidates = np.where(on_overloaded)[0]
             current_loads = aij[perm[candidates], candidates]
-            j_remove = candidates[np.argmax(current_loads)]
+
+            # === Job removal with safe randomization ===
+            if len(candidates) > 1 and rng.random() < 0.35:
+                k = min(4, len(current_loads))
+                # Safe top-k selection
+                if k == len(current_loads):
+                    top_k_idx = np.arange(len(current_loads))
+                else:
+                    top_k_idx = np.argpartition(-current_loads, k)[:k]
+
+                scores = current_loads[top_k_idx]
+                probs = np.exp(2.0 * scores)
+                probs /= probs.sum()
+
+                chosen_local = rng.choice(len(probs), p=probs)
+                j_remove = candidates[top_k_idx[chosen_local]]
+            else:
+                j_remove = candidates[np.argmax(current_loads)]
 
             i_old = perm[j_remove]
 
@@ -79,18 +97,43 @@ class BaseGA(LoggingGA):
             slack[i_old] = bi[i_old] - loads[i_old]
             perm[j_remove] = -1
 
-            # === Choose best target machine ===
+            # === Target machine selection with safe randomization ===
             aij_j = aij[:, j_remove]
 
             # Prefer feasible machines with smallest load increase
             feasible_mask = slack + aij_j <= bi + 1e-9
 
             if np.any(feasible_mask):
-                costs = np.where(feasible_mask, aij_j, np.inf)
-                target = int(np.argmin(costs))
+                feasible_idx = np.where(feasible_mask)[0]
+                feasible_aij = aij_j[feasible_idx]
+
+                if len(feasible_idx) == 1 or rng.random() < 0.65:
+                    # Pure greedy
+                    target = feasible_idx[np.argmin(feasible_aij)]
+                else:
+                    # Randomized among top-k
+                    k = min(5, len(feasible_idx))
+                    if k == len(feasible_idx):
+                        top_k = np.arange(len(feasible_idx))
+                    else:
+                        top_k = np.argpartition(feasible_aij, k)[:k]
+
+                    top_idx = feasible_idx[top_k]
+                    top_costs = feasible_aij[top_k]
+
+                    scores = -top_costs
+                    probs = np.exp(1.5 * scores)
+                    probs /= probs.sum()
+
+                    chosen = rng.choice(len(probs), p=probs)
+                    target = top_idx[chosen]
             else:
-                # No feasible → go to machine with largest slack
-                target = int(np.argmax(slack))
+                # No feasible machine
+                if rng.random() < 0.8:
+                    target = int(np.argmax(slack))
+                else:
+                    top3 = np.argpartition(slack, -3)[-3:]
+                    target = rng.choice(top3)
 
             # Assign
             perm[j_remove] = target
