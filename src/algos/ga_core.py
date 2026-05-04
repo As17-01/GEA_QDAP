@@ -11,6 +11,7 @@ from src.algos.utils import timed
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
+from src.operators.repair import GreedyRepair, RFRepair
 
 
 class BaseGA(LoggingGA):
@@ -20,11 +21,17 @@ class BaseGA(LoggingGA):
         self.population_size = population_size
         self.iterations = iterations
 
+        self.repair_class = RFRepair(self.model)
+
         # Core GA objects
         self.rng = np.random.default_rng()
         self.population: List[Individual] = []
         self.best_solution: Individual | None = None
         self.worst_cost: float = float("inf")
+
+    @timed("repair")
+    def repair_wrapper(self, perm):
+        return self.repair_class.repair(perm)
 
     @timed("initialization")
     def initialize_population(self) -> None:
@@ -32,123 +39,13 @@ class BaseGA(LoggingGA):
 
         for _ in range(self.population_size):
             perm = self.rng.integers(0, self.model.I, size=self.model.J, dtype=int)
-            perm = self.repair_permutation(perm)
+            perm = self.repair_wrapper(perm)
             ind = evaluate_permutation(perm, [ind.permutation for ind in self.population], self.model)
             self.population.append(ind)
 
         self.population.sort(key=lambda x: x.cost)
         self.best_solution = self.population[0]
         self.worst_cost = self.population[-1].cost
-
-    @timed("repair")
-    def repair_permutation(self, perm: np.ndarray, max_repair_attempts: int = 100) -> np.ndarray:
-        perm = perm.copy()
-        I = self.model.I
-        J = self.model.J
-        aij = self.model.aij
-        bi = self.model.bi
-        rng = self.rng
-
-        # Current loads and slack
-        loads = np.bincount(perm, weights=aij[perm, np.arange(J)], minlength=I)
-        slack = bi - loads
-
-        attempts = 0
-
-        while attempts < max_repair_attempts:
-            attempts += 1
-
-            # Find all overloaded machines
-            overloaded = np.where(slack < -1e-9)[0]
-            if len(overloaded) == 0:
-                break
-
-            # Find all jobs on overloaded machines
-            on_overloaded = np.isin(perm, overloaded)
-            if not np.any(on_overloaded):
-                break
-
-            # Among jobs on overloaded machines, pick the one with largest aij on its current machine
-            candidates = np.where(on_overloaded)[0]
-            current_loads = aij[perm[candidates], candidates]
-
-            # === Job removal with safe randomization ===
-            if len(candidates) > 1 and rng.random() < 0.35:
-                k = min(4, len(current_loads))
-                # Safe top-k selection
-                if k == len(current_loads):
-                    top_k_idx = np.arange(len(current_loads))
-                else:
-                    top_k_idx = np.argpartition(-current_loads, k)[:k]
-
-                scores = current_loads[top_k_idx]
-                probs = np.exp(2.0 * scores)
-                probs /= probs.sum()
-
-                chosen_local = rng.choice(len(probs), p=probs)
-                j_remove = candidates[top_k_idx[chosen_local]]
-            else:
-                j_remove = candidates[np.argmax(current_loads)]
-
-            i_old = perm[j_remove]
-
-            # Remove temporarily
-            loads[i_old] -= aij[i_old, j_remove]
-            slack[i_old] = bi[i_old] - loads[i_old]
-            perm[j_remove] = -1
-
-            # === Target machine selection with safe randomization ===
-            aij_j = aij[:, j_remove]
-
-            # Prefer feasible machines with smallest load increase
-            feasible_mask = slack + aij_j <= bi + 1e-9
-
-            if np.any(feasible_mask):
-                feasible_idx = np.where(feasible_mask)[0]
-                feasible_aij = aij_j[feasible_idx]
-
-                if len(feasible_idx) == 1 or rng.random() < 0.65:
-                    # Pure greedy
-                    target = feasible_idx[np.argmin(feasible_aij)]
-                else:
-                    # Randomized among top-k
-                    k = min(5, len(feasible_idx))
-                    if k == len(feasible_idx):
-                        top_k = np.arange(len(feasible_idx))
-                    else:
-                        top_k = np.argpartition(feasible_aij, k)[:k]
-
-                    top_idx = feasible_idx[top_k]
-                    top_costs = feasible_aij[top_k]
-
-                    scores = -top_costs
-                    probs = np.exp(1.5 * scores)
-                    probs /= probs.sum()
-
-                    chosen = rng.choice(len(probs), p=probs)
-                    target = top_idx[chosen]
-            else:
-                # No feasible machine
-                if rng.random() < 0.8:
-                    target = int(np.argmax(slack))
-                else:
-                    top3 = np.argpartition(slack, -3)[-3:]
-                    target = rng.choice(top3)
-
-            # Assign
-            perm[j_remove] = target
-            loads[target] += aij[target, j_remove]
-            slack[target] = bi[target] - loads[target]
-
-        # Final safety pass: force assign remaining if any (very rare)
-        if np.any(perm == -1):
-            for j in np.where(perm == -1)[0]:
-                target = int(np.argmax(slack))
-                perm[j] = target
-                loads[target] += aij[target, j]
-                slack[target] = bi[target] - loads[target]
-
-        return perm
 
     @timed("selection")
     def compute_selection_probabilities(self, beta: float = 10.0) -> np.ndarray:
@@ -188,7 +85,7 @@ class BaseGA(LoggingGA):
             perms = choose_crossover((p1, p2), self.rng)
 
             for perm in perms:
-                perm = self.repair_permutation(perm)
+                perm = self.repair_wrapper(perm)
                 child = evaluate_permutation(perm, [ind.permutation for ind in self.population], self.model)
 
                 offspring.append(child)
@@ -207,7 +104,7 @@ class BaseGA(LoggingGA):
         for _ in range(n):
             idx = self.rng.integers(0, len(self.population))
             perm = choose_mutation(self.population[idx].permutation, self.model, self.rng)
-            perm = self.repair_permutation(perm)
+            perm = self.repair_wrapper(perm)
             ind = evaluate_permutation(perm, [ind.permutation for ind in self.population], self.model)
 
             mutations.append(ind)
