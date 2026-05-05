@@ -88,7 +88,7 @@ class BaseGA(LoggingGA):
             i2 = self._roulette_wheel_selection(probabilities)
 
             p1, p2 = self.population[i1], self.population[i2]
-            perms = choose_crossover((p1, p2), self.rng)
+            perms = choose_crossover((p1, p2))
 
             for perm in perms:
                 perm = self.repair_wrapper(perm)
