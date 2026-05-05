@@ -50,7 +50,6 @@ class Individual:
     permutation: np.ndarray  # (J,)
     xij: np.ndarray  # (I, J)
     cost: float
-    diversity: float
     cvar: np.ndarray  # (I,)
 
     def __eq__(self, other) -> bool:

@@ -29,7 +29,7 @@ class LoggingGA(ABC):
     def print_iteration_info(self, iteration: int, iter_time: float) -> None:
         """Print detailed information for every N iterations."""
         print(
-            f"Iter {iteration:5d} | Best: {self.best_solution.cost:12.4f} | Best Diversity: {self.best_solution.diversity:12.4f} | "
+            f"Iter {iteration:5d} | Best: {self.best_solution.cost:12.4f} | "
             f"Time: {iter_time*1000:6.2f}ms | "
             f"CX: {self._crossover_new_best:3d}/{self._crossover_valid:5d}/{self._crossover_attempts:5d} | "
             f"MUT: {self._mutation_new_best:3d}/{self._mutation_valid:5d}/{self._mutation_attempts:5d}"

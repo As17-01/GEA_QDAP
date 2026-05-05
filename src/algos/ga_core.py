@@ -5,13 +5,13 @@ from typing import List
 
 import numpy as np
 
-from src.algos.costs import evaluate_permutation
+from src.algos.costs import evaluate_permutation, get_diversity
 from src.algos.ga_logging import LoggingGA
 from src.algos.utils import timed
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
-from src.operators.repair import GreedyRepair, RFRepair
+from src.operators.repair import RFRepair
 
 
 class BaseGA(LoggingGA):
@@ -40,7 +40,7 @@ class BaseGA(LoggingGA):
         for _ in range(self.population_size):
             perm = self.rng.integers(0, self.model.I, size=self.model.J, dtype=int)
             perm = self.repair_wrapper(perm)
-            ind = evaluate_permutation(perm, [ind.permutation for ind in self.population], self.model)
+            ind = evaluate_permutation(perm, self.model)
             self.population.append(ind)
 
         self.population.sort(key=lambda x: x.cost)
@@ -48,29 +48,41 @@ class BaseGA(LoggingGA):
         self.worst_cost = self.population[-1].cost
 
     @timed("selection")
-    def compute_selection_probabilities(self, beta: float = 10.0) -> np.ndarray:
-        costs = np.array([ind.diversity for ind in self.population], dtype=float)
-        probs = np.exp(-beta * costs / self.worst_cost)
-        return probs / probs.sum()
+    def compute_selection_probabilities(self, beta: float = 10.0, diversity_weight: float = 0.5) -> np.ndarray:
+        costs = np.array([ind.cost for ind in self.population], dtype=np.float32)
+
+        diversity_scores = get_diversity(population_base=self.population, population_to_eval=self.population)
+
+        cost_score = -costs / (np.max(costs) + 1e-8)
+        combined_score = (1.0 - diversity_weight) * cost_score + diversity_weight * diversity_scores
+
+        # Softmax with temperature
+        probs = np.exp(beta * combined_score)
+        probs = probs / probs.sum()
+
+        return probs
 
     def _roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
         return int(np.searchsorted(np.cumsum(probabilities), self.rng.random(), side="right"))
 
     def select_from_pool(self, pool):
         unique_pool = list(dict.fromkeys(pool))
-
-        n_best = int(0.5 * self.population_size)
-        n_diverse = self.population_size - n_best
+        n = self.population_size
 
         unique_pool.sort(key=lambda x: x.cost)
-        best = unique_pool[:n_best]
 
-        unique_pool.sort(key=lambda x: x.diversity)
-        diverse = unique_pool[:n_diverse]
+        n_elite = n // 2
+        elite = unique_pool[:n_elite]
+        remaining = unique_pool[n_elite:]
 
-        self.population = best + diverse
-        all_perms = [ind.permutation for ind in self.population]
-        self.population = [evaluate_permutation(perm, all_perms, self.model) for perm in all_perms]
+        diversity_array = get_diversity(population_base=elite, population_to_eval=remaining)
+        scored_remaining = list(zip(remaining, diversity_array))
+        scored_remaining.sort(key=lambda x: x[1])
+
+        n_diverse = n - n_elite
+        diverse_selected = [ind for ind, _ in scored_remaining[:n_diverse]]
+
+        self.population = elite + diverse_selected
 
     @timed("crossover")
     def crossover(self, probabilities: np.ndarray, n: int) -> List[Individual]:
@@ -86,7 +98,7 @@ class BaseGA(LoggingGA):
 
             for perm in perms:
                 perm = self.repair_wrapper(perm)
-                child = evaluate_permutation(perm, [ind.permutation for ind in self.population], self.model)
+                child = evaluate_permutation(perm, self.model)
 
                 offspring.append(child)
                 if math.isfinite(child.cost):
@@ -105,7 +117,7 @@ class BaseGA(LoggingGA):
             idx = self.rng.integers(0, len(self.population))
             perm = choose_mutation(self.population[idx].permutation, self.model, self.rng)
             perm = self.repair_wrapper(perm)
-            ind = evaluate_permutation(perm, [ind.permutation for ind in self.population], self.model)
+            ind = evaluate_permutation(perm, self.model)
 
             mutations.append(ind)
             if math.isfinite(ind.cost):
