@@ -43,7 +43,7 @@ def calculate_statistics(values: List[float]) -> Dict[str, float]:
 # =========================
 
 
-def run_single_experiment(dataset_name: str, algo_type: str, run_num: int, iterations: int, pop_size: int):
+def run_single_experiment(dataset_name: str, algo_type: str, run_num: int, iterations: int, pop_size: int, crossover_rate: float, mutation_rate: float):
 
     seed = hash((dataset_name, algo_type, run_num)) & 0x7FFFFFFF
     np.random.seed(seed)
@@ -52,10 +52,10 @@ def run_single_experiment(dataset_name: str, algo_type: str, run_num: int, itera
         model = load_model(dataset_name)
 
         if algo_type == "adaptive":
-            ga = AdaptiveGA(model, population_size=pop_size, iterations=iterations)
+            ga = AdaptiveGA(model, population_size=pop_size, iterations=iterations, crossover_rate=crossover_rate, mutation_rate=mutation_rate)
             best = ga.run()
         else:
-            ga = StandardGA(model, population_size=pop_size, iterations=iterations)
+            ga = StandardGA(model, population_size=pop_size, iterations=iterations, crossover_rate=crossover_rate, mutation_rate=mutation_rate)
             best = ga.run()
 
         return (algo_type, run_num, best.cost, None)
@@ -69,17 +69,17 @@ def run_single_experiment(dataset_name: str, algo_type: str, run_num: int, itera
 # =========================
 
 
-def run_dataset_tests(dataset_name: str, iterations: int, pop_size: int, runs: int):
+def run_dataset_tests(dataset_name: str, iterations: int, pop_size: int, crossover_rate: float, mutation_rate: float, runs: int):
     results = {"standard": [], "adaptive": []}
     errors = 0
 
     print(f"   Running {runs} runs for standard + adaptive...")
 
-    for algo_type in ["standard", "adaptive"]:
+    for algo_type in ["standard"]:
         for r in range(1, runs + 1):
             print(f"     → {algo_type} run {r}/{runs}", end=" ")
 
-            algo_type, run_num, cost, err = run_single_experiment(dataset_name, algo_type, r, iterations, pop_size)
+            algo_type, run_num, cost, err = run_single_experiment(dataset_name, algo_type, r, iterations, pop_size, crossover_rate, mutation_rate)
 
             if err:
                 errors += 1
@@ -107,7 +107,9 @@ def main():
 
     ITERATIONS = 1000
     POP_SIZE = 350
-    RUNS = 30
+    CROSSOVER_RATE = 0.1
+    MUTATION_RATE = 0.1
+    RUNS = 1
 
     all_results = []
 
@@ -115,12 +117,14 @@ def main():
     print(f"   Datasets     : {len(datasets)}")
     print(f"   Runs per algo: {RUNS}")
     print(f"   Iterations   : {ITERATIONS}")
-    print(f"   Population   : {POP_SIZE}\n")
+    print(f"   Population   : {POP_SIZE}")
+    print(f"   Crossover rt : {CROSSOVER_RATE}")
+    print(f"   Mutation rt  : {MUTATION_RATE}\n")
 
     for i, ds in enumerate(datasets, 1):
         print(f"[{_ts()}] Dataset {i}/{len(datasets)}: {ds}")
 
-        res = run_dataset_tests(ds, ITERATIONS, POP_SIZE, RUNS)
+        res = run_dataset_tests(ds, ITERATIONS, POP_SIZE, CROSSOVER_RATE, MUTATION_RATE, RUNS)
         all_results.append(res)
 
         print(f"   Results:")
