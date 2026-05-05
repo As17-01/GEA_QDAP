@@ -1,8 +1,6 @@
 import math
-from typing import List
 
 from src.algos.ga_core import BaseGA
-from src.data.models import Individual
 
 
 class StandardGA(BaseGA):

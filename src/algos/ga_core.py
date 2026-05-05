@@ -17,6 +17,7 @@ from src.operators.repair import RFRepair
 class BaseGA(LoggingGA):
     def __init__(self, model: Model, population_size: int, iterations: int):
         super().__init__()
+
         self.model = model
         self.population_size = population_size
         self.iterations = iterations
@@ -24,7 +25,6 @@ class BaseGA(LoggingGA):
         self.repair_class = RFRepair(self.model)
 
         # Core GA objects
-        self.rng = np.random.default_rng()
         self.population: List[Individual] = []
         self.best_solution: Individual | None = None
         self.worst_cost: float = float("inf")
@@ -38,7 +38,7 @@ class BaseGA(LoggingGA):
         self.population = []
 
         for _ in range(self.population_size):
-            perm = self.rng.integers(0, self.model.I, size=self.model.J, dtype=int)
+            perm = np.random.randint(0, self.model.I, size=self.model.J, dtype=int)
             perm = self.repair_wrapper(perm)
             ind = evaluate_permutation(perm, self.model)
             self.population.append(ind)
@@ -57,7 +57,7 @@ class BaseGA(LoggingGA):
         return probs
 
     def _roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
-        return int(np.searchsorted(np.cumsum(probabilities), self.rng.random(), side="right"))
+        return int(np.searchsorted(np.cumsum(probabilities), np.random.random(), side="right"))
 
     def select_from_pool(self, pool):
         unique_pool = list(dict.fromkeys(pool))
@@ -108,7 +108,7 @@ class BaseGA(LoggingGA):
         self._mutation_attempts += n
 
         for _ in range(n):
-            idx = self.rng.integers(0, len(self.population))
+            idx = np.random.randint(0, len(self.population))
             perm = choose_mutation(self.population[idx].permutation, self.model)
             perm = self.repair_wrapper(perm)
             ind = evaluate_permutation(perm, self.model)
