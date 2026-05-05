@@ -32,22 +32,12 @@ def get_diversity(
     permutation: np.ndarray,
     population_perms: List[np.ndarray],
     total_cost: float,
-    sample_size: int = 50,
-    min_sample: int = 10,
 ) -> float:
     if not population_perms:
         return float(total_cost)
 
-    n_pop = len(population_perms)
-    if n_pop <= min_sample:
-        sample_perms = population_perms
-    else:
-        # Randomly sample to speed up significantly
-        indices = np.random.choice(n_pop, size=min(sample_size, n_pop), replace=False)
-        sample_perms = [population_perms[i] for i in indices]
-
     # Convert to 2D array for Numba
-    sample_array = np.array(sample_perms, dtype=np.int32)  # (sample_size, J)
+    sample_array = np.array(population_perms, dtype=np.int32)  # (sample_size, J)
     avg_hamming = _hamming_distances_numba(permutation.astype(np.int32), sample_array)
 
     diversity_score = avg_hamming / len(permutation)  # 0 = identical, 1 = completely different
