@@ -48,15 +48,10 @@ class BaseGA(LoggingGA):
         self.worst_cost = self.population[-1].cost
 
     @timed("selection")
-    def compute_selection_probabilities(self, beta: float = 10.0, diversity_weight: float = 0.5) -> np.ndarray:
-        costs = np.array([ind.cost for ind in self.population], dtype=np.float32)
-
+    def compute_selection_probabilities(self, beta: float = 10.0) -> np.ndarray:
         diversity_scores = get_diversity(population_base=self.population, population_to_eval=self.population)
+        combined_score = diversity_scores
 
-        cost_score = -costs / (np.max(costs) + 1e-8)
-        combined_score = (1.0 - diversity_weight) * cost_score + diversity_weight * diversity_scores
-
-        # Softmax with temperature
         probs = np.exp(beta * combined_score)
         probs = probs / probs.sum()
 
