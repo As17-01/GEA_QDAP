@@ -50,9 +50,8 @@ class BaseGA(LoggingGA):
     @timed("selection")
     def compute_selection_probabilities(self, beta: float = 10.0) -> np.ndarray:
         diversity_scores = get_diversity(population_base=self.population, population_to_eval=self.population)
-        combined_score = diversity_scores
 
-        probs = np.exp(beta * combined_score)
+        probs = np.exp(beta * diversity_scores)
         probs = probs / probs.sum()
 
         return probs
@@ -110,7 +109,7 @@ class BaseGA(LoggingGA):
 
         for _ in range(n):
             idx = self.rng.integers(0, len(self.population))
-            perm = choose_mutation(self.population[idx].permutation, self.model, self.rng)
+            perm = choose_mutation(self.population[idx].permutation, self.model)
             perm = self.repair_wrapper(perm)
             ind = evaluate_permutation(perm, self.model)
 
