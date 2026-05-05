@@ -1,0 +1,130 @@
+[2026-05-05 15:44:38] Starting sequential testing
+   Datasets     : 1
+   Runs per algo: 1
+   Iterations   : 5000
+   Population   : 600
+
+[2026-05-05 15:44:38] Dataset 1/1: T10
+   Running 1 runs for standard + adaptive...
+     → standard run 1/1 GA started → Population: 600 | Iterations: 5000
+
+Iter    50 | Best: 187930134.3733 | Best Diversity:       0.3583 | Time: 4887.87ms | CX:  57/21000/21000 | MUT:   5/ 8992/ 9000
+Iter   100 | Best: 178811409.2913 | Best Diversity:       0.4181 | Time: 4872.15ms | CX:  49/21000/21000 | MUT:   2/ 8892/ 9000
+Iter   150 | Best: 173476968.5311 | Best Diversity:       0.4694 | Time: 4925.71ms | CX:  48/21000/21000 | MUT:   8/ 8732/ 9000
+Iter   200 | Best: 169339910.2976 | Best Diversity:       0.4715 | Time: 5052.30ms | CX:  66/21000/21000 | MUT:   5/ 8612/ 9000
+Iter   250 | Best: 165908156.7272 | Best Diversity:       0.4790 | Time: 4761.23ms | CX:  33/21000/21000 | MUT:   4/ 8496/ 9000
+Iter   300 | Best: 162221325.6591 | Best Diversity:       0.4853 | Time: 4696.91ms | CX:  44/21000/21000 | MUT:   4/ 8448/ 9000
+Iter   350 | Best: 159190647.8924 | Best Diversity:       0.4891 | Time: 4648.25ms | CX:  31/21000/21000 | MUT:   1/ 8388/ 9000
+Iter   400 | Best: 155564856.8035 | Best Diversity:       0.4915 | Time: 4862.64ms | CX:  30/21000/21000 | MUT:   6/ 8292/ 9000
+Iter   450 | Best: 152919462.1261 | Best Diversity:       0.4926 | Time: 4847.26ms | CX:  31/21000/21000 | MUT:   3/ 8234/ 9000
+Iter   500 | Best: 149993126.7745 | Best Diversity:       0.4936 | Time: 4758.49ms | CX:  36/21000/21000 | MUT:   3/ 8211/ 9000
+Iter   550 | Best: 147509662.6667 | Best Diversity:       0.4974 | Time: 4685.69ms | CX:  45/21000/21000 | MUT:   4/ 8111/ 9000
+Iter   600 | Best: 144441576.6768 | Best Diversity:       0.4905 | Time: 4809.85ms | CX:  47/21000/21000 | MUT:   1/ 8069/ 9000
+Iter   650 | Best: 141368751.3541 | Best Diversity:       0.4865 | Time: 4733.60ms | CX:  46/21000/21000 | MUT:   3/ 8012/ 9000
+Iter   700 | Best: 138805869.1210 | Best Diversity:       0.4930 | Time: 4168.54ms | CX:  40/21000/21000 | MUT:   3/ 8041/ 9000
+Iter   750 | Best: 136370398.3095 | Best Diversity:       0.4934 | Time: 4715.16ms | CX:  26/21000/21000 | MUT:   1/ 7965/ 9000
+Iter   800 | Best: 134772635.1849 | Best Diversity:       0.4978 | Time: 4729.37ms | CX:  24/21000/21000 | MUT:   2/ 7958/ 9000
+Iter   850 | Best: 132970063.9941 | Best Diversity:       0.4959 | Time: 5568.23ms | CX:  30/21000/21000 | MUT:   6/ 7998/ 9000
+Iter   900 | Best: 131185678.4045 | Best Diversity:       0.4945 | Time: 5567.47ms | CX:  47/21000/21000 | MUT:   6/ 7981/ 9000
+Iter   950 | Best: 128908700.9679 | Best Diversity:       0.4914 | Time: 5491.44ms | CX:  37/21000/21000 | MUT:   2/ 7899/ 9000
+Iter  1000 | Best: 126869302.2090 | Best Diversity:       0.4955 | Time: 5397.69ms | CX:  18/21000/21000 | MUT:   2/ 7910/ 9000
+Iter  1050 | Best: 124856989.3704 | Best Diversity:       0.4946 | Time: 5791.87ms | CX:  30/21000/21000 | MUT:   2/ 7859/ 9000
+Iter  1100 | Best: 122934621.8349 | Best Diversity:       0.4915 | Time: 5721.68ms | CX:  29/21000/21000 | MUT:   1/ 7879/ 9000
+Iter  1150 | Best: 120809708.7622 | Best Diversity:       0.4971 | Time: 5866.00ms | CX:  36/21000/21000 | MUT:   2/ 7880/ 9000
+Iter  1200 | Best: 118978172.4886 | Best Diversity:       0.5009 | Time: 5680.50ms | CX:  36/21000/21000 | MUT:   1/ 7810/ 9000
+Iter  1250 | Best: 117279401.4558 | Best Diversity:       0.5020 | Time: 5699.26ms | CX:  30/21000/21000 | MUT:   4/ 7755/ 9000
+Iter  1300 | Best: 115689218.0263 | Best Diversity:       0.4952 | Time: 5599.34ms | CX:  22/21000/21000 | MUT:   2/ 7819/ 9000
+Iter  1350 | Best: 113824032.6045 | Best Diversity:       0.4941 | Time: 5599.33ms | CX:  29/21000/21000 | MUT:   0/ 7763/ 9000
+Iter  1400 | Best: 112262878.1226 | Best Diversity:       0.4961 | Time: 5641.01ms | CX:  40/21000/21000 | MUT:   1/ 7716/ 9000
+Iter  1450 | Best: 110238089.6450 | Best Diversity:       0.4943 | Time: 5681.59ms | CX:  34/21000/21000 | MUT:   2/ 7739/ 9000
+Iter  1500 | Best: 108666257.5993 | Best Diversity:       0.4990 | Time: 5608.84ms | CX:  25/21000/21000 | MUT:   1/ 7724/ 9000
+Iter  1550 | Best: 107034162.5142 | Best Diversity:       0.4976 | Time: 5620.34ms | CX:  27/21000/21000 | MUT:   2/ 7729/ 9000
+Iter  1600 | Best: 105470037.7827 | Best Diversity:       0.4975 | Time: 5611.92ms | CX:  36/21000/21000 | MUT:   2/ 7734/ 9000
+Iter  1650 | Best: 104237554.1133 | Best Diversity:       0.4985 | Time: 5635.45ms | CX:  28/21000/21000 | MUT:   0/ 7639/ 9000
+Iter  1700 | Best: 102704040.4225 | Best Diversity:       0.4962 | Time: 5760.79ms | CX:  25/21000/21000 | MUT:   1/ 7673/ 9000
+Iter  1750 | Best: 101507683.2261 | Best Diversity:       0.4955 | Time: 5541.72ms | CX:  24/21000/21000 | MUT:   1/ 7670/ 9000
+Iter  1800 | Best: 100966219.4309 | Best Diversity:       0.5014 | Time: 5616.14ms | CX:  15/21000/21000 | MUT:   0/ 7736/ 9000
+Iter  1850 | Best: 100006045.8625 | Best Diversity:       0.5017 | Time: 5633.14ms | CX:  29/21000/21000 | MUT:   0/ 7666/ 9000
+Iter  1900 | Best: 98859612.5911 | Best Diversity:       0.5023 | Time: 5892.80ms | CX:  42/21000/21000 | MUT:   0/ 7570/ 9000
+Iter  1950 | Best: 97896174.0467 | Best Diversity:       0.5023 | Time: 5761.11ms | CX:  28/21000/21000 | MUT:   0/ 7670/ 9000
+Iter  2000 | Best: 97114745.1697 | Best Diversity:       0.5025 | Time: 5606.35ms | CX:  33/21000/21000 | MUT:   1/ 7672/ 9000
+Iter  2050 | Best: 96455228.3217 | Best Diversity:       0.5053 | Time: 5787.69ms | CX:  22/21000/21000 | MUT:   2/ 7595/ 9000
+Iter  2100 | Best: 96050021.5766 | Best Diversity:       0.5010 | Time: 5739.14ms | CX:  19/21000/21000 | MUT:   1/ 7614/ 9000
+Iter  2150 | Best: 95031176.1793 | Best Diversity:       0.5008 | Time: 5765.16ms | CX:  26/21000/21000 | MUT:   2/ 7577/ 9000
+Iter  2200 | Best: 94367965.3450 | Best Diversity:       0.5011 | Time: 5730.24ms | CX:  22/21000/21000 | MUT:   1/ 7552/ 9000
+Iter  2250 | Best: 93649089.0299 | Best Diversity:       0.5021 | Time: 5693.76ms | CX:  26/21000/21000 | MUT:   0/ 7547/ 9000
+Iter  2300 | Best: 92723313.2820 | Best Diversity:       0.4991 | Time: 5837.28ms | CX:  27/21000/21000 | MUT:   0/ 7642/ 9000
+Iter  2350 | Best: 91868824.7108 | Best Diversity:       0.4991 | Time: 5847.13ms | CX:  29/21000/21000 | MUT:   1/ 7590/ 9000
+Iter  2400 | Best: 90929202.9253 | Best Diversity:       0.4954 | Time: 5636.54ms | CX:  29/21000/21000 | MUT:   0/ 7619/ 9000
+Iter  2450 | Best: 90310258.7768 | Best Diversity:       0.4975 | Time: 5877.52ms | CX:  12/21000/21000 | MUT:   1/ 7612/ 9000
+Iter  2500 | Best: 89683757.2641 | Best Diversity:       0.5028 | Time: 5730.21ms | CX:  18/21000/21000 | MUT:   2/ 7547/ 9000
+Iter  2550 | Best: 89279637.2755 | Best Diversity:       0.5026 | Time: 5534.19ms | CX:  13/21000/21000 | MUT:   1/ 7550/ 9000
+Iter  2600 | Best: 88634399.7560 | Best Diversity:       0.5022 | Time: 5534.03ms | CX:  21/21000/21000 | MUT:   0/ 7592/ 9000
+Iter  2650 | Best: 88137851.8936 | Best Diversity:       0.5050 | Time: 5411.39ms | CX:  28/21000/21000 | MUT:   1/ 7515/ 9000
+Iter  2700 | Best: 87686355.4318 | Best Diversity:       0.5024 | Time: 5559.71ms | CX:  27/21000/21000 | MUT:   4/ 7562/ 9000
+Iter  2750 | Best: 87111454.7935 | Best Diversity:       0.5006 | Time: 5686.02ms | CX:  27/21000/21000 | MUT:   1/ 7487/ 9000
+Iter  2800 | Best: 86659778.8703 | Best Diversity:       0.5019 | Time: 5605.31ms | CX:  18/21000/21000 | MUT:   0/ 7493/ 9000
+Iter  2850 | Best: 86200318.5466 | Best Diversity:       0.5028 | Time: 5826.06ms | CX:  27/21000/21000 | MUT:   1/ 7523/ 9000
+Iter  2900 | Best: 85734176.0680 | Best Diversity:       0.5025 | Time: 6165.93ms | CX:  26/21000/21000 | MUT:   1/ 7586/ 9000
+Iter  2950 | Best: 85295229.5283 | Best Diversity:       0.5018 | Time: 5725.20ms | CX:  19/21000/21000 | MUT:   0/ 7528/ 9000
+Iter  3000 | Best: 84964266.1412 | Best Diversity:       0.5050 | Time: 5783.08ms | CX:  15/21000/21000 | MUT:   0/ 7552/ 9000
+Iter  3050 | Best: 84569425.7325 | Best Diversity:       0.5028 | Time: 5761.79ms | CX:  21/21000/21000 | MUT:   3/ 7563/ 9000
+Iter  3100 | Best: 84171260.3414 | Best Diversity:       0.5039 | Time: 5721.93ms | CX:  21/21000/21000 | MUT:   3/ 7524/ 9000
+Iter  3150 | Best: 83908710.3223 | Best Diversity:       0.5022 | Time: 5924.59ms | CX:  24/21000/21000 | MUT:   0/ 7533/ 9000
+Iter  3200 | Best: 83527242.8576 | Best Diversity:       0.5060 | Time: 5760.27ms | CX:  24/21000/21000 | MUT:   0/ 7523/ 9000
+Iter  3250 | Best: 83236506.6822 | Best Diversity:       0.5038 | Time: 5724.62ms | CX:  19/21000/21000 | MUT:   2/ 7488/ 9000
+Iter  3300 | Best: 83009848.2355 | Best Diversity:       0.5049 | Time: 5865.71ms | CX:  13/21000/21000 | MUT:   0/ 7516/ 9000
+Iter  3350 | Best: 82634330.5780 | Best Diversity:       0.5040 | Time: 5889.27ms | CX:  25/21000/21000 | MUT:   0/ 7589/ 9000
+Iter  3400 | Best: 82303484.0303 | Best Diversity:       0.5056 | Time: 5790.71ms | CX:  20/21000/21000 | MUT:   1/ 7477/ 9000
+Iter  3450 | Best: 81976636.9550 | Best Diversity:       0.5031 | Time: 5943.92ms | CX:  14/21000/21000 | MUT:   1/ 7497/ 9000
+Iter  3500 | Best: 81584493.5800 | Best Diversity:       0.5036 | Time: 5758.69ms | CX:  13/21000/21000 | MUT:   0/ 7514/ 9000
+Iter  3550 | Best: 81261091.3596 | Best Diversity:       0.5057 | Time: 5726.32ms | CX:  12/21000/21000 | MUT:   0/ 7499/ 9000
+Iter  3600 | Best: 80988545.1641 | Best Diversity:       0.5036 | Time: 5752.99ms | CX:  14/21000/21000 | MUT:   1/ 7507/ 9000
+Iter  3650 | Best: 80731833.7250 | Best Diversity:       0.5033 | Time: 5748.90ms | CX:  15/21000/21000 | MUT:   1/ 7497/ 9000
+Iter  3700 | Best: 80365008.7169 | Best Diversity:       0.5038 | Time: 5793.52ms | CX:  19/21000/21000 | MUT:   2/ 7521/ 9000
+Iter  3750 | Best: 80133292.1969 | Best Diversity:       0.5047 | Time: 5786.10ms | CX:  17/21000/21000 | MUT:   0/ 7538/ 9000
+Iter  3800 | Best: 79872389.3017 | Best Diversity:       0.5065 | Time: 5688.05ms | CX:  24/21000/21000 | MUT:   0/ 7490/ 9000
+Iter  3850 | Best: 79703943.5598 | Best Diversity:       0.5067 | Time: 5740.98ms | CX:  16/21000/21000 | MUT:   0/ 7514/ 9000
+Iter  3900 | Best: 79463191.2807 | Best Diversity:       0.5062 | Time: 5631.44ms | CX:  17/21000/21000 | MUT:   0/ 7474/ 9000
+Iter  3950 | Best: 79157173.3650 | Best Diversity:       0.5064 | Time: 5844.59ms | CX:  10/21000/21000 | MUT:   0/ 7566/ 9000
+Iter  4000 | Best: 78977926.5820 | Best Diversity:       0.5065 | Time: 5663.31ms | CX:   9/21000/21000 | MUT:   0/ 7489/ 9000
+Iter  4050 | Best: 78685769.2343 | Best Diversity:       0.5008 | Time: 5660.08ms | CX:  11/21000/21000 | MUT:   0/ 7479/ 9000
+Iter  4100 | Best: 78356615.4919 | Best Diversity:       0.5054 | Time: 5832.71ms | CX:  15/21000/21000 | MUT:   0/ 7519/ 9000
+Iter  4150 | Best: 78106036.5317 | Best Diversity:       0.5027 | Time: 5737.81ms | CX:  15/21000/21000 | MUT:   3/ 7523/ 9000
+Iter  4200 | Best: 77807220.4005 | Best Diversity:       0.5036 | Time: 5971.35ms | CX:  10/21000/21000 | MUT:   0/ 7544/ 9000
+Iter  4250 | Best: 77582546.9436 | Best Diversity:       0.5049 | Time: 5719.75ms | CX:  12/21000/21000 | MUT:   0/ 7489/ 9000
+Iter  4300 | Best: 77332443.5581 | Best Diversity:       0.5041 | Time: 5914.69ms | CX:  13/21000/21000 | MUT:   2/ 7468/ 9000
+Iter  4350 | Best: 77033624.8323 | Best Diversity:       0.5048 | Time: 5083.92ms | CX:  19/21000/21000 | MUT:   0/ 7578/ 9000
+Iter  4400 | Best: 76915044.7350 | Best Diversity:       0.5033 | Time: 4979.97ms | CX:  12/21000/21000 | MUT:   0/ 7479/ 9000
+Iter  4450 | Best: 76632653.2355 | Best Diversity:       0.5046 | Time: 5025.01ms | CX:  11/21000/21000 | MUT:   1/ 7507/ 9000
+Iter  4500 | Best: 76352313.3237 | Best Diversity:       0.5059 | Time: 4645.98ms | CX:  23/21000/21000 | MUT:   0/ 7431/ 9000
+Iter  4550 | Best: 76121196.2655 | Best Diversity:       0.5051 | Time: 4514.12ms | CX:  20/21000/21000 | MUT:   0/ 7443/ 9000
+Iter  4600 | Best: 75938235.8095 | Best Diversity:       0.5054 | Time: 4752.62ms | CX:  14/21000/21000 | MUT:   2/ 7501/ 9000
+Iter  4650 | Best: 75779171.9592 | Best Diversity:       0.5063 | Time: 5114.91ms | CX:  18/21000/21000 | MUT:   0/ 7557/ 9000
+Iter  4700 | Best: 75638584.7018 | Best Diversity:       0.5051 | Time: 4531.25ms | CX:  14/21000/21000 | MUT:   1/ 7460/ 9000
+Iter  4750 | Best: 75481099.5249 | Best Diversity:       0.5075 | Time: 4696.88ms | CX:  12/21000/21000 | MUT:   0/ 7505/ 9000
+Iter  4800 | Best: 75346873.7832 | Best Diversity:       0.5072 | Time: 4740.46ms | CX:   7/21000/21000 | MUT:   0/ 7463/ 9000
+Iter  4850 | Best: 75252477.1393 | Best Diversity:       0.5069 | Time: 4486.11ms | CX:  10/21000/21000 | MUT:   0/ 7451/ 9000
+Iter  4900 | Best: 75165731.3018 | Best Diversity:       0.5061 | Time: 4592.51ms | CX:  10/21000/21000 | MUT:   0/ 7540/ 9000
+Iter  4950 | Best: 75034219.5379 | Best Diversity:       0.5063 | Time: 5525.03ms | CX:  16/21000/21000 | MUT:   0/ 7437/ 9000
+Iter  5000 | Best: 74792039.4739 | Best Diversity:       0.5062 | Time: 5649.45ms | CX:  19/21000/21000 | MUT:   0/ 7501/ 9000
+
+====================================================================================================
+GENETIC ALGORITHM - FINAL REPORT
+====================================================================================================
+Total runtime            : 27883.3063 seconds
+Iterations completed     : 5000
+Average time / iteration :  5575.24 ms
+Final best cost          : 74792039.473865
+
+Time breakdown:
+  crossover          : 9734.1637s ( 5000 calls, 1946.83 ms avg)
+  mutation           : 4179.2753s ( 5000 calls, 835.86 ms avg)
+  repair             : 215.3140s (3000600 calls,   0.07 ms avg)
+  initialization     :   6.0629s (    1 calls, 6062.89 ms avg)
+  selection          :   0.4569s ( 5000 calls,   0.09 ms avg)
+====================================================================================================
+→ cost = 74792039.47
+   Results:
+     standard   | mean=74792039.47 | min=74792039.47 | std=  0.00
+     adaptive   | mean=    0.00 | min=    0.00 | std=  0.00
