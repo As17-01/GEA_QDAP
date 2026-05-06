@@ -54,6 +54,7 @@ class BaseGA(LoggingGA):
         probs = np.exp(beta * diversity_scores)
         probs = probs / probs.sum()
 
+        self.avg_diversity = np.mean(diversity_scores)
         return probs
 
     def _roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
@@ -69,7 +70,7 @@ class BaseGA(LoggingGA):
         elite = unique_pool[:n_elite]
         remaining = unique_pool[n_elite:]
 
-        diversity_array = get_diversity(population_base=unique_pool, population_to_eval=remaining)
+        diversity_array = get_diversity(population_base=elite, population_to_eval=remaining)
         scored_remaining = list(zip(remaining, diversity_array))
         scored_remaining.sort(key=lambda x: x[1], reverse=True)
 
@@ -109,8 +110,11 @@ class BaseGA(LoggingGA):
 
         for _ in range(n):
             idx = np.random.randint(0, len(self.population))
-            perm = choose_mutation(self.population[idx].permutation, self.model)
+            init_perm = self.population[idx].permutation
+
+            perm = choose_mutation(init_perm, self.model)
             perm = self.repair_wrapper(perm)
+
             ind = evaluate_permutation(perm, self.model)
 
             mutations.append(ind)

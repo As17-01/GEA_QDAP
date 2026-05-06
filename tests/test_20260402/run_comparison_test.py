@@ -131,8 +131,8 @@ def main():
 
     ITERATIONS = 1000
     POP_SIZE = 350
-    CROSSOVER_RATE = 0.1
-    MUTATION_RATE = 0.1
+    CROSSOVER_RATE = 0.7
+    MUTATION_RATE = 0.3
     RUNS = 1
 
     all_results = []
