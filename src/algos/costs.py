@@ -29,21 +29,16 @@ def _hamming_distances_numba(perm: np.ndarray, pop_perms: np.ndarray) -> np.ndar
 
 
 def get_diversity(population_base: List[Individual], population_to_eval: List[Individual]) -> np.ndarray:
-    J = len(population_base[0].permutation)
-
-    # Extract permutations
     base_perms = np.array([ind.permutation for ind in population_base], dtype=np.int32)  # (N_base, J)
     eval_perms = np.array([ind.permutation for ind in population_to_eval], dtype=np.int32)  # (N_eval, J)
 
-    diversities = np.empty(len(population_to_eval), dtype=np.float32)
+    J = base_perms.shape[1]
 
-    for i in range(len(population_to_eval)):
-        hamming_dists = _hamming_distances_numba(eval_perms[i], base_perms)
-        avg_hamming = np.mean(hamming_dists)
+    diff = eval_perms[:, None, :] != base_perms[None, :, :]
+    hamming = diff.sum(axis=2)
+    diversities = hamming.mean(axis=1) / J
 
-        diversities[i] = avg_hamming / J  # 0 = identical, 1 = completely different
-
-    return diversities
+    return diversities.astype(np.float32)
 
 
 def cost_function_perm(permutation: np.ndarray, model: Model) -> Tuple[float, float, np.ndarray]:

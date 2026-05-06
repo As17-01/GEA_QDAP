@@ -71,7 +71,7 @@ class BaseGA(LoggingGA):
 
         diversity_array = get_diversity(population_base=unique_pool, population_to_eval=remaining)
         scored_remaining = list(zip(remaining, diversity_array))
-        scored_remaining.sort(key=lambda x: x[1])
+        scored_remaining.sort(key=lambda x: x[1], reverse=True)
 
         n_diverse = n - n_elite
         diverse_selected = [ind for ind, _ in scored_remaining[:n_diverse]]
