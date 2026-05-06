@@ -92,7 +92,7 @@ def run_single_experiment(
 def run_dataset_tests(
     dataset_name: str, iterations: int, pop_size: int, crossover_rate: float, mutation_rate: float, runs: int
 ):
-    results = {"standard": [], "adaptive": []}
+    results = {"standard": []}
     errors = 0
 
     print(f"   Running {runs} runs for standard...")
