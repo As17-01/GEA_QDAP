@@ -47,7 +47,6 @@ class BaseGA(LoggingGA):
         self.best_solution = self.population[0]
         self.worst_cost = self.population[-1].cost
 
-    @timed("selection")
     def compute_selection_probabilities(self, beta: float = 10.0) -> np.ndarray:
         diversity_scores = get_diversity(population_base=self.population, population_to_eval=self.population)
 
@@ -60,6 +59,7 @@ class BaseGA(LoggingGA):
     def _roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
         return int(np.searchsorted(np.cumsum(probabilities), np.random.random(), side="right"))
 
+    @timed("selection")
     def select_from_pool(self, pool):
         unique_pool = list(dict.fromkeys(pool))
         n = self.population_size

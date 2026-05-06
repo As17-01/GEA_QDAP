@@ -95,7 +95,7 @@ def run_dataset_tests(
     results = {"standard": [], "adaptive": []}
     errors = 0
 
-    print(f"   Running {runs} runs for standard + adaptive...")
+    print(f"   Running {runs} runs for standard...")
 
     for algo_type in ["standard"]:
         for r in range(1, runs + 1):

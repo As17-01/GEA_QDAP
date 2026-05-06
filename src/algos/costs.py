@@ -13,21 +13,6 @@ def create_xij(permutation: np.ndarray, model: Model) -> np.ndarray:
     return xij
 
 
-@njit(fastmath=True, cache=True)
-def _hamming_distances_numba(perm: np.ndarray, pop_perms: np.ndarray) -> np.ndarray:
-    pop_size, J = pop_perms.shape
-    dists = np.empty(pop_size, dtype=np.float32)
-
-    for i in prange(pop_size):
-        dist = 0
-        for j in range(J):
-            if perm[j] != pop_perms[i, j]:
-                dist += 1
-        dists[i] = dist
-
-    return dists
-
-
 def get_diversity(population_base: List[Individual], population_to_eval: List[Individual]) -> np.ndarray:
     base_perms = np.array([ind.permutation for ind in population_base], dtype=np.int32)  # (N_base, J)
     eval_perms = np.array([ind.permutation for ind in population_to_eval], dtype=np.int32)  # (N_eval, J)
