@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 
 from src.algos.logger import GALogger
-from src.costs import cost_function_perm, evaluate_permutation
+from src.costs import cost_function_perm, cost_function_perm_delta, evaluate_permutation, evaluate_permutation_delta
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
@@ -42,19 +42,16 @@ class BaseGA(ABC):
         self.worst_cost: float = float("inf")
         self.progress: float = 0.0
 
-    def repair_wrapper(self, perm):
+    def repair_batch_wrapper(self, perms: np.ndarray) -> np.ndarray:
         with self.logger.timed("repair"):
-            return self.repair_class.repair(perm, self.model)
+            return self.repair_class.repair_batch(perms, self.model)
 
     def initialize_population(self) -> None:
         with self.logger.timed("initialization"):
-            self.population = []
+            perms = np.random.randint(0, self.model.I, size=(self.population_size, self.model.J), dtype=int)
+            perms = self.repair_batch_wrapper(perms)
 
-            for _ in range(self.population_size):
-                perm = np.random.randint(0, self.model.I, size=self.model.J, dtype=int)
-                perm = self.repair_wrapper(perm)
-                ind = evaluate_permutation(perm, self.model)
-                self.population.append(ind)
+            self.population = [evaluate_permutation(perms[i], self.model) for i in range(self.population_size)]
 
             self.population.sort(key=lambda x: x.cost)
             self.best_solution = self.population[0]
@@ -70,6 +67,9 @@ class BaseGA(ABC):
         new_best = 0
 
         with self.logger.timed("crossover"):
+            raw_perms = []
+            baselines = []
+
             for _ in range(0, n, 2):
                 i1 = self.selector.roulette_wheel_selection(probabilities)
                 i2 = self.selector.roulette_wheel_selection(probabilities)
@@ -77,9 +77,17 @@ class BaseGA(ABC):
                 p1, p2 = self.population[i1], self.population[i2]
                 perms = choose_crossover((p1, p2))
 
-                for perm in perms:
-                    perm = self.repair_wrapper(perm)
-                    child = evaluate_permutation(perm, self.model)
+                # child[k] is derived mostly from parent[k] (exactly so for one-point
+                # crossover; for two-point it's still correct, just a less tight delta
+                # baseline), so pairing them keeps the delta-cost evaluation cheap.
+                raw_perms.extend(perms)
+                baselines.extend((p1, p2))
+
+            if raw_perms:
+                repaired = self.repair_batch_wrapper(np.array(raw_perms))
+
+                for perm, baseline in zip(repaired, baselines):
+                    child = evaluate_permutation_delta(baseline, perm, self.model)
 
                     offspring.append(child)
                     if math.isfinite(child.cost):
@@ -96,20 +104,21 @@ class BaseGA(ABC):
         new_best = 0
 
         with self.logger.timed("mutation"):
-            for _ in range(n):
-                idx = np.random.randint(0, len(self.population))
-                init_perm = self.population[idx].permutation
+            if n > 0:
+                indices = np.random.randint(0, len(self.population), size=n)
+                baselines = [self.population[idx] for idx in indices]
 
-                perm = choose_mutation(init_perm, self.model)
-                perm = self.repair_wrapper(perm)
+                raw_perms = np.array([choose_mutation(b.permutation, self.model) for b in baselines])
+                repaired = self.repair_batch_wrapper(raw_perms)
 
-                ind = evaluate_permutation(perm, self.model)
+                for perm, baseline in zip(repaired, baselines):
+                    ind = evaluate_permutation_delta(baseline, perm, self.model)
 
-                mutations.append(ind)
-                if math.isfinite(ind.cost):
-                    valid += 1
-                    if ind.cost < self.best_solution.cost:
-                        new_best += 1
+                    mutations.append(ind)
+                    if math.isfinite(ind.cost):
+                        valid += 1
+                        if ind.cost < self.best_solution.cost:
+                            new_best += 1
 
         self.logger.record_mutation(n, valid, new_best)
         return mutations
@@ -124,14 +133,20 @@ class BaseGA(ABC):
                 improved = False
 
                 for j in range(self.model.J):
+                    # `perm` here is the current committed state (position j still at its
+                    # original value) -- the natural delta baseline for each candidate i.
                     original = perm[j]
                     best_facility = original
 
                     for i in range(self.model.I):
                         if i == original:
                             continue
-                        perm[j] = i
-                        cost, _ = cost_function_perm(perm, self.model)
+                        trial_perm = perm.copy()
+                        trial_perm[j] = i
+                        if math.isfinite(best_cost):
+                            cost, _ = cost_function_perm_delta(perm, trial_perm, best_cost, self.model)
+                        else:
+                            cost, _ = cost_function_perm(trial_perm, self.model)
                         if cost < best_cost:
                             best_cost = cost
                             best_facility = i

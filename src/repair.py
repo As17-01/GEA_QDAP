@@ -1,10 +1,10 @@
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 
 # Picks the cheapest facility with spare capacity for i_job; falls back to the
 # facility with the most slack if none fit.
-@njit
+@njit(cache=True)
 def _select_target_greedy(i_job, aij, slack, bi, I, tol, subsample_size):
     best_target = -1
     best_cost = 1e18
@@ -27,7 +27,7 @@ def _select_target_greedy(i_job, aij, slack, bi, I, tol, subsample_size):
 
 # Same as _select_target_greedy but only samples a random subset of facilities,
 # trading optimality for population diversity.
-@njit
+@njit(cache=True)
 def _select_target_rf(i_job, aij, slack, bi, I, tol, subsample_size):
     k = int(I * subsample_size)
     if k > I:
@@ -57,7 +57,7 @@ def _select_target_rf(i_job, aij, slack, bi, I, tol, subsample_size):
 
 # Iteratively evicts each overloaded facility's heaviest job and reassigns it via
 # select_target_fn, until every facility is within capacity or attempts run out.
-@njit
+@njit(cache=True)
 def _repair_core(perm, aij, bi, I, J, tol, max_repair_attempts, subsample_size, select_target_fn):
     loads = np.zeros(I, dtype=aij.dtype)
 
@@ -128,6 +128,17 @@ def _repair_core(perm, aij, bi, I, J, tol, max_repair_attempts, subsample_size, 
     return perm
 
 
+# Repairs a whole batch of permutations in one call -- each row is independent, so this
+# runs across cores via prange instead of paying per-individual Python<->numba dispatch
+# overhead for every offspring/mutant in a generation.
+@njit(parallel=True, cache=True)
+def _repair_core_batch(perms, aij, bi, I, J, tol, max_repair_attempts, subsample_size, select_target_fn):
+    n = perms.shape[0]
+    for idx in prange(n):
+        perms[idx] = _repair_core(perms[idx], aij, bi, I, J, tol, max_repair_attempts, subsample_size, select_target_fn)
+    return perms
+
+
 # Repairs capacity violations by always reassigning to the cheapest feasible facility.
 class GreedyRepair:
     def __init__(self, tol: float = 1e-9):
@@ -142,6 +153,19 @@ class GreedyRepair:
     def repair(self, perm: np.ndarray, model, max_repair_attempts: int = 100) -> np.ndarray:
         return _repair_core(
             perm.copy(),
+            model.aij,
+            model.bi,
+            model.I,
+            model.J,
+            self.tol,
+            max_repair_attempts,
+            self._get_subsample_size(),
+            self._get_selector(),
+        )
+
+    def repair_batch(self, perms: np.ndarray, model, max_repair_attempts: int = 100) -> np.ndarray:
+        return _repair_core_batch(
+            perms.copy(),
             model.aij,
             model.bi,
             model.I,

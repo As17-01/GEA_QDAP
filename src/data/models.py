@@ -41,7 +41,6 @@ class Model:
 @dataclass
 class Individual:
     permutation: np.ndarray  # (J,)
-    xij: np.ndarray  # (I, J)
     cost: float
     cvar: np.ndarray  # (I,)
 

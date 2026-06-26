@@ -26,14 +26,26 @@ class DiversitySelector:
         beta: float = 10.0,
         diversity_weight_start: float = 0.7,
         diversity_weight_end: float = 0.2,
+        diversity_sample_size: int | None = None,
     ):
         self.beta = beta
         self.diversity_weight_start = diversity_weight_start
         self.diversity_weight_end = diversity_weight_end
+        # get_diversity is O(N_base * N_eval * J); diversity_sample_size caps N_base by
+        # comparing against a random subset instead of the whole reference population.
+        # None (default) keeps the exact original behavior -- this is an opt-in speed/
+        # accuracy tradeoff for large populations, not a default-on change.
+        self.diversity_sample_size = diversity_sample_size
         self.avg_diversity: float = 0.0
 
+    def _sample_base(self, population_base: List[Individual]) -> List[Individual]:
+        if self.diversity_sample_size is None or len(population_base) <= self.diversity_sample_size:
+            return population_base
+        idx = np.random.choice(len(population_base), size=self.diversity_sample_size, replace=False)
+        return [population_base[i] for i in idx]
+
     def compute_selection_probabilities(self, population: List[Individual]) -> np.ndarray:
-        diversity_scores = get_diversity(population_base=population, population_to_eval=population)
+        diversity_scores = get_diversity(population_base=self._sample_base(population), population_to_eval=population)
 
         probs = np.exp(self.beta * diversity_scores)
         probs = probs / probs.sum()
@@ -55,7 +67,7 @@ class DiversitySelector:
         elite = unique_pool[:n_elite]
         remaining = unique_pool[n_elite:]
 
-        diversity_array = get_diversity(population_base=elite, population_to_eval=remaining)
+        diversity_array = get_diversity(population_base=self._sample_base(elite), population_to_eval=remaining)
 
         # Normalize costs so lower cost -> higher score
         costs = np.array([ind.cost for ind in remaining], dtype=float)
