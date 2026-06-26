@@ -8,13 +8,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-import numpy as np
-
 TEST_DIR = Path(__file__).parent
 sys.path.insert(0, str(TEST_DIR.parent.parent))
 
 from src.algos.ga_adaptive import AdaptiveGA
 from src.algos.ga_standard import StandardGA
+from src.algos.utils import seed_all
 from src.data.model_loader import list_available_models, load_model
 
 # =========================
@@ -54,7 +53,7 @@ def run_single_experiment(
 ):
 
     seed = hash((dataset_name, algo_type, run_num)) & 0x7FFFFFFF
-    np.random.seed(seed)
+    seed_all(seed)
 
     try:
         model = load_model(dataset_name)

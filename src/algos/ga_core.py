@@ -5,13 +5,25 @@ from typing import List
 
 import numpy as np
 
-from src.algos.costs import evaluate_permutation, get_diversity
+from src.algos.costs import cost_function_perm, evaluate_permutation, get_diversity
 from src.algos.ga_logging import LoggingGA
 from src.algos.utils import timed
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
 from src.operators.repair import RFRepair
+
+# Local search (memetic polishing) is only worth its O(J*I) cost-recompute overhead
+# on small instances -- on the large T-datasets (J in the thousands) it would dominate runtime.
+LOCAL_SEARCH_MAX_J = 50
+LOCAL_SEARCH_TOP_K = 3
+LOCAL_SEARCH_MAX_PASSES = 2
+
+# Diversity pressure in select_from_pool decays linearly from DIVERSITY_WEIGHT_START to
+# DIVERSITY_WEIGHT_END over the run, so late generations on small instances can converge
+# onto the exact optimum instead of being held away from it by the diversity term.
+DIVERSITY_WEIGHT_START = 0.7
+DIVERSITY_WEIGHT_END = 0.2
 
 
 class BaseGA(LoggingGA):
@@ -28,6 +40,7 @@ class BaseGA(LoggingGA):
         self.population: List[Individual] = []
         self.best_solution: Individual | None = None
         self.worst_cost: float = float("inf")
+        self.progress: float = 0.0
 
     @timed("repair")
     def repair_wrapper(self, perm):
@@ -86,9 +99,10 @@ class BaseGA(LoggingGA):
             cost_scores = np.ones_like(costs)
 
         # Combine diversity and cost
-        # Adjust weights as needed
-        diversity_weight = 0.7
-        cost_weight = 0.3
+        # Decay diversity pressure over the run so the population can settle
+        # onto the best cost found instead of being pinned apart by diversity.
+        diversity_weight = DIVERSITY_WEIGHT_START - (DIVERSITY_WEIGHT_START - DIVERSITY_WEIGHT_END) * self.progress
+        cost_weight = 1.0 - diversity_weight
 
         combined_scores = (
             diversity_weight * diversity_array
@@ -149,6 +163,46 @@ class BaseGA(LoggingGA):
 
         return mutations
 
+    @timed("local_search")
+    def local_search(self, perm: np.ndarray) -> np.ndarray:
+        """Hill-climb by reassigning one job at a time to its best feasible facility."""
+        perm = perm.copy()
+        best_cost, _ = cost_function_perm(perm, self.model)
+
+        for _ in range(LOCAL_SEARCH_MAX_PASSES):
+            improved = False
+
+            for j in range(self.model.J):
+                original = perm[j]
+                best_facility = original
+
+                for i in range(self.model.I):
+                    if i == original:
+                        continue
+                    perm[j] = i
+                    cost, _ = cost_function_perm(perm, self.model)
+                    if cost < best_cost:
+                        best_cost = cost
+                        best_facility = i
+                        improved = True
+
+                perm[j] = best_facility
+
+            if not improved:
+                break
+
+        return perm
+
+    def polish_elites(self) -> None:
+        if self.model.J > LOCAL_SEARCH_MAX_J:
+            return
+
+        for idx in range(min(LOCAL_SEARCH_TOP_K, len(self.population))):
+            ind = self.population[idx]
+            polished_perm = self.local_search(ind.permutation)
+            if polished_perm is not ind.permutation and not np.array_equal(polished_perm, ind.permutation):
+                self.population[idx] = evaluate_permutation(polished_perm, self.model)
+
     @abstractmethod
     def step(self) -> None:
         pass
@@ -160,8 +214,12 @@ class BaseGA(LoggingGA):
         print(f"GA started → Population: {self.population_size:,} | Iterations: {self.iterations}\n")
 
         for it in range(1, self.iterations + 1):
+            self.progress = it / self.iterations
+
             iter_start = time.perf_counter()
             self.step()
+            self.population.sort(key=lambda x: x.cost)
+            self.polish_elites()
             iter_time = time.perf_counter() - iter_start
             self._iteration_times.append(iter_time)
 
