@@ -130,8 +130,7 @@ def _repair_core(perm, aij, bi, I, J, tol, max_repair_attempts, subsample_size, 
 
 # Repairs capacity violations by always reassigning to the cheapest feasible facility.
 class GreedyRepair:
-    def __init__(self, model, tol: float = 1e-9):
-        self.model = model
+    def __init__(self, tol: float = 1e-9):
         self.tol = tol
 
     def _get_selector(self):
@@ -140,13 +139,13 @@ class GreedyRepair:
     def _get_subsample_size(self):
         return 0  # unused
 
-    def repair(self, perm: np.ndarray, max_repair_attempts: int = 100) -> np.ndarray:
+    def repair(self, perm: np.ndarray, model, max_repair_attempts: int = 100) -> np.ndarray:
         return _repair_core(
             perm.copy(),
-            self.model.aij,
-            self.model.bi,
-            self.model.I,
-            self.model.J,
+            model.aij,
+            model.bi,
+            model.I,
+            model.J,
             self.tol,
             max_repair_attempts,
             self._get_subsample_size(),
@@ -156,8 +155,8 @@ class GreedyRepair:
 
 # Repairs capacity violations by reassigning to the cheapest of a random facility subset.
 class RFRepair(GreedyRepair):
-    def __init__(self, model, tol: float = 1e-9, subsample_size: float = 0.2):
-        super().__init__(model, tol)
+    def __init__(self, tol: float = 1e-9, subsample_size: float = 0.2):
+        super().__init__(tol)
         self.subsample_size = subsample_size
 
     def _get_selector(self):

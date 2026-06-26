@@ -1,5 +1,6 @@
 defaults:
   - datasets: common
+  - components@ga: common
   - _self_
 
 hydra:

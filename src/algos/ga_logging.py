@@ -1,7 +1,27 @@
 import time
 from abc import ABC
 from collections import defaultdict
+from functools import wraps
 from typing import List
+
+
+def timed(operation_name: str):
+    """Decorator to measure execution time of operations on a LoggingGA instance."""
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            start = time.perf_counter()
+            result = func(self, *args, **kwargs)
+            elapsed = time.perf_counter() - start
+
+            self._timing[operation_name] += elapsed
+            self._timing_calls[operation_name] += 1
+            return result
+
+        return wrapper
+
+    return decorator
 
 
 class LoggingGA(ABC):

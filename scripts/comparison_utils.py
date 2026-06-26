@@ -5,8 +5,8 @@ from typing import Dict, List
 import hydra
 from omegaconf import DictConfig
 
-from src.algos.utils import seed_all
 from src.data.model_loader import load_model
+from src.seeding import seed_all
 
 
 def timestamp() -> str:

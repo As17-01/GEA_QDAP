@@ -1,0 +1,12 @@
+# Repair and selection strategies shared by every algorithm config (standard.yaml,
+# adaptive.yaml), merged directly into their `ga` node via the `components@ga` default.
+repair_class:
+  _target_: src.repair.RFRepair
+  tol: 1e-9
+  subsample_size: 0.2
+
+selector:
+  _target_: src.selection.DiversitySelector
+  beta: 10.0
+  diversity_weight_start: 0.7
+  diversity_weight_end: 0.2

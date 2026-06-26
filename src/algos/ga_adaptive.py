@@ -13,8 +13,10 @@ class AdaptiveGA(BaseGA):
         lambda_min=0.4,
         lambda_max=1.5,
         epsilon=1e-5,
+        repair_class=None,
+        selector=None,
     ):
-        super().__init__(model, population_size, iterations)
+        super().__init__(model, population_size, iterations, repair_class=repair_class, selector=selector)
 
         self.base_crossover = crossover_rate
         self.base_mutation = mutation_rate
@@ -32,7 +34,7 @@ class AdaptiveGA(BaseGA):
         return max(self.lambda_min, min(self.lambda_max, new_val))
 
     def step(self) -> None:
-        probs = self.compute_selection_probabilities()
+        probs = self.selector.compute_selection_probabilities(self.population)
 
         ncrossover = int(self.base_crossover * self.population_size * self.lambda_crossover)
         nmutation = int(self.base_mutation * self.population_size * self.lambda_mutation)

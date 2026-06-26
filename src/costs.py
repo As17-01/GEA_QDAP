@@ -1,7 +1,6 @@
-from typing import List, Tuple
+from typing import Tuple
 
 import numpy as np
-from numba import njit, prange
 
 from src.data.models import Individual, Model
 
@@ -11,19 +10,6 @@ def create_xij(permutation: np.ndarray, model: Model) -> np.ndarray:
     job_indices = np.arange(model.J)
     xij[permutation, job_indices] = 1
     return xij
-
-
-def get_diversity(population_base: List[Individual], population_to_eval: List[Individual]) -> np.ndarray:
-    base_perms = np.array([ind.permutation for ind in population_base], dtype=np.int32)  # (N_base, J)
-    eval_perms = np.array([ind.permutation for ind in population_to_eval], dtype=np.int32)  # (N_eval, J)
-
-    J = base_perms.shape[1]
-
-    diff = eval_perms[:, None, :] != base_perms[None, :, :]
-    hamming = diff.sum(axis=2)
-    diversities = hamming.mean(axis=1) / J
-
-    return diversities.astype(np.float32)
 
 
 def cost_function_perm(permutation: np.ndarray, model: Model) -> Tuple[float, float, np.ndarray]:
