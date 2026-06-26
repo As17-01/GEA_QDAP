@@ -4,7 +4,7 @@ from typing import List
 
 import numpy as np
 
-from src.algos.ga_logging import GALogger
+from src.algos.logger import GALogger
 from src.costs import cost_function_perm, evaluate_permutation
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
