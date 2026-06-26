@@ -7,7 +7,7 @@ import numpy as np
 
 from src.data.models import Model
 
-DATA_DIR = Path(__file__).resolve().parent.parent.parent / "datasets"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "debug_datasets"
 
 
 def list_available_models() -> List[str]:

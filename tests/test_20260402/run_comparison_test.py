@@ -67,7 +67,7 @@ def run_single_experiment(
                 crossover_rate=crossover_rate,
                 mutation_rate=mutation_rate,
             )
-            best = ga.run()
+            best = ga.run(time_limit=1000)
         else:
             ga = StandardGA(
                 model,
@@ -76,7 +76,7 @@ def run_single_experiment(
                 crossover_rate=crossover_rate,
                 mutation_rate=mutation_rate,
             )
-            best = ga.run()
+            best = ga.run(time_limit=1000)
 
         return (algo_type, run_num, best.cost, None)
 

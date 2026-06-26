@@ -64,14 +64,38 @@ class BaseGA(LoggingGA):
         unique_pool = list(dict.fromkeys(pool))
         n = self.population_size
 
+        # Sort by cost (lower is better)
         unique_pool.sort(key=lambda x: x.cost)
 
         n_elite = n // 2
         elite = unique_pool[:n_elite]
         remaining = unique_pool[n_elite:]
 
-        diversity_array = get_diversity(population_base=elite, population_to_eval=remaining)
-        scored_remaining = list(zip(remaining, diversity_array))
+        # Diversity score
+        diversity_array = get_diversity(
+            population_base=elite,
+            population_to_eval=remaining
+        )
+
+        # Normalize costs so lower cost -> higher score
+        costs = np.array([ind.cost for ind in remaining], dtype=float)
+
+        if len(costs) > 1 and costs.max() != costs.min():
+            cost_scores = 1.0 - (costs - costs.min()) / (costs.max() - costs.min())
+        else:
+            cost_scores = np.ones_like(costs)
+
+        # Combine diversity and cost
+        # Adjust weights as needed
+        diversity_weight = 0.7
+        cost_weight = 0.3
+
+        combined_scores = (
+            diversity_weight * diversity_array
+            + cost_weight * cost_scores
+        )
+
+        scored_remaining = list(zip(remaining, combined_scores))
         scored_remaining.sort(key=lambda x: x[1], reverse=True)
 
         n_diverse = n - n_elite
