@@ -17,7 +17,11 @@ ga:
   mutation_rate: 0.3
 
 run:
-  runs: 1
+  runs: 30
   time_limit: 1000
+  # Mirrors run_test.sbatch's NUM_WORKERS env var (set there alongside pinning
+  # OMP/MKL/OPENBLAS/NUMEXPR to 1 thread each, so this multiprocessing pool is the only
+  # thing using all the allocated cores). Falls back to 4 for ad-hoc local runs.
+  workers: ${oc.env:NUM_WORKERS,4}
 
 output_file: results/standard.json

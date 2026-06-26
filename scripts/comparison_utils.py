@@ -1,9 +1,25 @@
+import os
+
+# Must be set before numba/numpy are imported anywhere in this process -- numba reads
+# NUMBA_NUM_THREADS once at its own first import and refuses to change it afterward, and
+# BLAS backends (used by numpy under the hood) similarly lock in their thread count at
+# first use. Worker processes (forked or spawned) inherit these from the parent's
+# environment at process-creation time, so setting them here -- before the `from src...`
+# imports below pull numba/numpy in -- is what makes them take effect in every worker.
+# Each worker does its own numeric work single-threaded; the parallelism comes entirely
+# from the process pool, so N workers don't also each spawn a thread pool across every
+# core (oversubscription). run_test.sbatch sets the same four BLAS variables at the shell
+# level already; setdefault here just makes ad-hoc local runs (outside sbatch) safe too,
+# without overriding whatever the caller already set.
+for _env_var in ("NUMBA_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_env_var, "1")
+
 import statistics
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from typing import Dict, List
 
 import hydra
-from omegaconf import DictConfig
 
 from src.data.model_loader import load_model
 from src.seeding import seed_all
@@ -29,7 +45,7 @@ def run_single_experiment(
     dataset_name: str,
     algo_label: str,
     run_num: int,
-    ga_cfg: DictConfig,
+    ga_cfg: dict,
     time_limit: float,
 ):
     seed = hash((dataset_name, algo_label, run_num)) & 0x7FFFFFFF
@@ -40,37 +56,57 @@ def run_single_experiment(
         ga = hydra.utils.instantiate(ga_cfg, model=model)
         best = ga.run(time_limit=time_limit)
 
-        return (algo_label, run_num, best.cost, None)
+        return (dataset_name, run_num, best.cost, None)
 
     except Exception as e:
-        return (algo_label, run_num, None, str(e))
+        return (dataset_name, run_num, None, str(e))
 
 
-def run_dataset_tests(dataset_name: str, algo_label: str, ga_cfg: DictConfig, time_limit: float, runs: int) -> dict:
-    results = {algo_label: []}
-    errors = 0
+def run_all_experiments(
+    datasets: List[str],
+    algo_label: str,
+    ga_cfg: dict,
+    time_limit: float,
+    runs: int,
+    workers: int,
+) -> List[dict]:
+    """Runs every (dataset, run) combination across a process pool and returns one stats
+    dict per dataset, in the same shape run_dataset_tests used to produce. Each run is an
+    independent GA call (fresh model load, own seed), so this parallelizes flatly across
+    every (dataset, run) pair rather than nesting a pool per dataset.
+    """
+    tasks = [(ds, r) for ds in datasets for r in range(1, runs + 1)]
+    results_by_dataset: Dict[str, List[float]] = {ds: [] for ds in datasets}
+    errors_by_dataset: Dict[str, int] = {ds: 0 for ds in datasets}
 
-    print(f"   Running {runs} runs for {algo_label}...")
+    print(f"   Running {len(tasks)} experiments ({len(datasets)} datasets x {runs} runs) across {workers} workers...")
 
-    for r in range(1, runs + 1):
-        print(f"     → {algo_label} run {r}/{runs}", end=" ")
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(run_single_experiment, ds, algo_label, r, ga_cfg, time_limit): (ds, r) for ds, r in tasks
+        }
 
-        _, _, cost, err = run_single_experiment(dataset_name, algo_label, r, ga_cfg, time_limit)
+        completed = 0
+        for future in as_completed(futures):
+            ds, r = futures[future]
+            _, _, cost, err = future.result()
+            completed += 1
 
-        if err:
-            errors += 1
-            print(f"[ERROR] {err}")
-        else:
-            results[algo_label].append(cost)
-            print(f"→ cost = {cost:.2f}")
+            if err:
+                errors_by_dataset[ds] += 1
+                print(f"   [{completed}/{len(tasks)}] {ds} run {r}/{runs} [ERROR] {err}")
+            else:
+                results_by_dataset[ds].append(cost)
+                print(f"   [{completed}/{len(tasks)}] {ds} run {r}/{runs} → cost = {cost:.2f}")
 
-    stats = {k: calculate_statistics(v) for k, v in results.items()}
-
-    return {
-        "dataset": dataset_name,
-        "results": stats,
-        "errors": errors,
-    }
+    return [
+        {
+            "dataset": ds,
+            "results": {algo_label: calculate_statistics(results_by_dataset[ds])},
+            "errors": errors_by_dataset[ds],
+        }
+        for ds in datasets
+    ]
 
 
 def print_dataset_results(res: dict) -> None:
