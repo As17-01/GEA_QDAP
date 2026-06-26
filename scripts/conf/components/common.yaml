@@ -10,6 +10,3 @@ selector:
   beta: 10.0
   diversity_weight_start: 0.7
   diversity_weight_end: 0.2
-  # Fraction (0-1) of the reference population to sample for diversity comparisons,
-  # for speed on large populations. null or 1.0 = full population (exact, default, slowest).
-  diversity_sample_size: null

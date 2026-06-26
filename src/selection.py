@@ -6,16 +6,35 @@ from src.data.models import Individual
 
 
 def get_diversity(population_base: List[Individual], population_to_eval: List[Individual]) -> np.ndarray:
+    """Mean Hamming distance (normalized by J) from each individual in population_to_eval
+    to population_base, as a fraction of J.
+
+    The mean over population_base only depends on per-position value frequencies in
+    population_base, not on N_base*N_eval pairwise comparisons: avg_b Hamming(e, b) at
+    position j is 1 - (count of b with base[b,j] == eval[e,j]) / N_base, summed over j.
+    That's O((N_base + N_eval) * J) instead of the naive O(N_base * N_eval * J) -- same
+    exact result, no precision/approximation tradeoff, just less redundant work.
+    """
+    if not population_to_eval:
+        return np.array([], dtype=np.float32)
+
     base_perms = np.array([ind.permutation for ind in population_base], dtype=np.int32)  # (N_base, J)
     eval_perms = np.array([ind.permutation for ind in population_to_eval], dtype=np.int32)  # (N_eval, J)
 
-    J = base_perms.shape[1]
+    n_base, J = base_perms.shape
+    num_facilities = int(max(base_perms.max(), eval_perms.max())) + 1
 
-    diff = eval_perms[:, None, :] != base_perms[None, :, :]
-    hamming = diff.sum(axis=2)
-    diversities = hamming.mean(axis=1) / J
+    # freq[j, v] = how many individuals in population_base have value v at position j
+    freq = np.zeros((J, num_facilities), dtype=np.int32)
+    j_grid = np.broadcast_to(np.arange(J), base_perms.shape)
+    np.add.at(freq, (j_grid, base_perms), 1)
 
-    return diversities.astype(np.float32)
+    # agreement_sum[e] = sum_j freq[j, eval_perms[e, j]] = total agreements with base, summed over j and averaged over b
+    j_idx = np.arange(J)
+    agreement_sum = freq[j_idx[None, :], eval_perms].sum(axis=1)
+
+    avg_hamming = J - agreement_sum / n_base
+    return (avg_hamming / J).astype(np.float32)
 
 
 # Parent selection (diversity-weighted roulette wheel) and survivor selection
@@ -26,30 +45,14 @@ class DiversitySelector:
         beta: float = 10.0,
         diversity_weight_start: float = 0.7,
         diversity_weight_end: float = 0.2,
-        diversity_sample_size: float | None = None,
     ):
         self.beta = beta
         self.diversity_weight_start = diversity_weight_start
         self.diversity_weight_end = diversity_weight_end
-        # get_diversity is O(N_base * N_eval * J); diversity_sample_size caps N_base by
-        # comparing against a random fraction (0 < frac <= 1) of the reference population
-        # instead of all of it. A fraction (not an absolute count) so it keeps the same
-        # meaning across population sizes. None or >=1.0 keeps the exact original
-        # behavior -- this is an opt-in speed/accuracy tradeoff, not a default-on change.
-        self.diversity_sample_size = diversity_sample_size
         self.avg_diversity: float = 0.0
 
-    def _sample_base(self, population_base: List[Individual]) -> List[Individual]:
-        if self.diversity_sample_size is None or self.diversity_sample_size >= 1.0:
-            return population_base
-        k = max(1, round(len(population_base) * self.diversity_sample_size))
-        if k >= len(population_base):
-            return population_base
-        idx = np.random.choice(len(population_base), size=k, replace=False)
-        return [population_base[i] for i in idx]
-
     def compute_selection_probabilities(self, population: List[Individual]) -> np.ndarray:
-        diversity_scores = get_diversity(population_base=self._sample_base(population), population_to_eval=population)
+        diversity_scores = get_diversity(population_base=population, population_to_eval=population)
 
         probs = np.exp(self.beta * diversity_scores)
         probs = probs / probs.sum()
@@ -79,7 +82,7 @@ class DiversitySelector:
         elite = unique_pool[:n_elite]
         remaining = unique_pool[n_elite:]
 
-        diversity_array = get_diversity(population_base=self._sample_base(elite), population_to_eval=remaining)
+        diversity_array = get_diversity(population_base=elite, population_to_eval=remaining)
 
         # Normalize costs so lower cost -> higher score
         costs = np.array([ind.cost for ind in remaining], dtype=float)
