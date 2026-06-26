@@ -34,7 +34,7 @@ class AdaptiveGA(BaseGA):
         return max(self.lambda_min, min(self.lambda_max, new_val))
 
     def step(self) -> None:
-        probs = self.selector.compute_selection_probabilities(self.population)
+        probs = self.compute_selection_probabilities()
 
         ncrossover = int(self.base_crossover * self.population_size * self.lambda_crossover)
         nmutation = int(self.base_mutation * self.population_size * self.lambda_mutation)

@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 from src.data.models import Model
 
@@ -79,6 +79,32 @@ def choose_mutation(permutation: np.ndarray, model: Model) -> np.ndarray:
         return mutation_random(permutation, model)
 
     return mutation_big_swap(permutation)
+
+
+# Batched dispatch for a whole generation's worth of mutants in one compiled call,
+# instead of one Python<->numba dispatch (choose_mutation) per individual. Mirrors
+# choose_mutation's op selection exactly, including the fact that np.random.randint(4)
+# only ever yields 0-3, so mutation_big_swap is never actually selected by either path.
+@njit(parallel=True, cache=True)
+def _mutation_batch_nb(perms: np.ndarray, ops: np.ndarray, max_value: int) -> np.ndarray:
+    n = perms.shape[0]
+    for k in prange(n):
+        op = ops[k]
+        if op == 0:
+            perms[k] = mutation_swap_nb(perms[k])
+        elif op == 1:
+            perms[k] = mutation_reversion_nb(perms[k])
+        elif op == 2:
+            perms[k] = mutation_insertion_nb(perms[k])
+        else:
+            perms[k] = mutation_random_nb(perms[k], max_value)
+    return perms
+
+
+def choose_mutation_batch(permutations: np.ndarray, model: Model) -> np.ndarray:
+    n = permutations.shape[0]
+    ops = np.random.randint(0, 4, size=n)
+    return _mutation_batch_nb(permutations.copy(), ops, int(model.I))
 
 
 def mutation_swap(permutation: np.ndarray) -> np.ndarray:

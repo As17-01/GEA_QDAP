@@ -15,6 +15,12 @@ class GALogger:
         self._timing_calls = defaultdict(int)
         self._iteration_times: List[float] = []
         self.start_time: float = 0.0
+        # Tracks time spent in nested timed() spans so a parent span (e.g. "crossover",
+        # which calls repair_batch_wrapper's "repair" span inside it) records only its
+        # own exclusive time -- otherwise "repair" gets counted both under its own key
+        # and again inside whichever span called it, and the rows stop being a true
+        # partition of wall-clock time.
+        self._child_time_stack: List[float] = []
 
         self._crossover_attempts = 0
         self._crossover_valid = 0
@@ -27,11 +33,19 @@ class GALogger:
     @contextmanager
     def timed(self, operation_name: str):
         start = time.perf_counter()
+        self._child_time_stack.append(0.0)
         try:
             yield
         finally:
-            self._timing[operation_name] += time.perf_counter() - start
+            elapsed = time.perf_counter() - start
+            child_time = self._child_time_stack.pop()
+            self_time = elapsed - child_time
+
+            self._timing[operation_name] += self_time
             self._timing_calls[operation_name] += 1
+
+            if self._child_time_stack:
+                self._child_time_stack[-1] += elapsed
 
     def start_run(self) -> None:
         self.start_time = time.perf_counter()

@@ -26,22 +26,26 @@ class DiversitySelector:
         beta: float = 10.0,
         diversity_weight_start: float = 0.7,
         diversity_weight_end: float = 0.2,
-        diversity_sample_size: int | None = None,
+        diversity_sample_size: float | None = None,
     ):
         self.beta = beta
         self.diversity_weight_start = diversity_weight_start
         self.diversity_weight_end = diversity_weight_end
         # get_diversity is O(N_base * N_eval * J); diversity_sample_size caps N_base by
-        # comparing against a random subset instead of the whole reference population.
-        # None (default) keeps the exact original behavior -- this is an opt-in speed/
-        # accuracy tradeoff for large populations, not a default-on change.
+        # comparing against a random fraction (0 < frac <= 1) of the reference population
+        # instead of all of it. A fraction (not an absolute count) so it keeps the same
+        # meaning across population sizes. None or >=1.0 keeps the exact original
+        # behavior -- this is an opt-in speed/accuracy tradeoff, not a default-on change.
         self.diversity_sample_size = diversity_sample_size
         self.avg_diversity: float = 0.0
 
     def _sample_base(self, population_base: List[Individual]) -> List[Individual]:
-        if self.diversity_sample_size is None or len(population_base) <= self.diversity_sample_size:
+        if self.diversity_sample_size is None or self.diversity_sample_size >= 1.0:
             return population_base
-        idx = np.random.choice(len(population_base), size=self.diversity_sample_size, replace=False)
+        k = max(1, round(len(population_base) * self.diversity_sample_size))
+        if k >= len(population_base):
+            return population_base
+        idx = np.random.choice(len(population_base), size=k, replace=False)
         return [population_base[i] for i in idx]
 
     def compute_selection_probabilities(self, population: List[Individual]) -> np.ndarray:
@@ -55,6 +59,14 @@ class DiversitySelector:
 
     def roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
         return int(np.searchsorted(np.cumsum(probabilities), np.random.random(), side="right"))
+
+    def roulette_wheel_selection_batch(self, probabilities: np.ndarray, size: int) -> np.ndarray:
+        """Draw `size` parent indices at once. probabilities is constant across all of them
+        within a generation, so the O(N) cumsum is computed once here instead of once per
+        draw (the single-draw roulette_wheel_selection above recomputes it every call)."""
+        cumsum = np.cumsum(probabilities)
+        draws = np.random.random(size=size)
+        return np.searchsorted(cumsum, draws, side="right")
 
     def select_from_pool(self, pool: List[Individual], population_size: int, progress: float) -> List[Individual]:
         unique_pool = list(dict.fromkeys(pool))

@@ -19,7 +19,7 @@ class StandardGA(BaseGA):
         self.mutation_rate = mutation_rate
 
     def step(self) -> None:
-        probs = self.selector.compute_selection_probabilities(self.population)
+        probs = self.compute_selection_probabilities()
 
         ncrossover = int(2 * round((self.crossover_rate * self.population_size) / 2))
         nmutation = int(math.floor(self.mutation_rate * self.population_size))

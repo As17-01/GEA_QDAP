@@ -8,7 +8,7 @@ from src.algos.logger import GALogger
 from src.costs import cost_function_perm, cost_function_perm_delta, evaluate_permutation, evaluate_permutation_delta
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
-from src.operators.mutations import choose_mutation
+from src.operators.mutations import choose_mutation_batch
 from src.repair import RFRepair
 from src.selection import DiversitySelector
 
@@ -57,8 +57,12 @@ class BaseGA(ABC):
             self.best_solution = self.population[0]
             self.worst_cost = self.population[-1].cost
 
+    def compute_selection_probabilities(self):
+        with self.logger.timed("parent_selection"):
+            return self.selector.compute_selection_probabilities(self.population)
+
     def select_from_pool(self, pool):
-        with self.logger.timed("selection"):
+        with self.logger.timed("survivor_selection"):
             self.population = self.selector.select_from_pool(pool, self.population_size, self.progress)
 
     def crossover(self, probabilities: np.ndarray, n: int) -> List[Individual]:
@@ -70,18 +74,25 @@ class BaseGA(ABC):
             raw_perms = []
             baselines = []
 
-            for _ in range(0, n, 2):
-                i1 = self.selector.roulette_wheel_selection(probabilities)
-                i2 = self.selector.roulette_wheel_selection(probabilities)
+            num_pairs = len(range(0, n, 2))
+            if num_pairs:
+                # Draw all parent indices for this generation in one shot: the cumsum
+                # inside roulette_wheel_selection is the same every time within a step,
+                # so computing it once here instead of once per draw avoids redoing
+                # O(population_size) work ~num_pairs*2 times for nothing.
+                parent_indices = self.selector.roulette_wheel_selection_batch(probabilities, 2 * num_pairs)
 
-                p1, p2 = self.population[i1], self.population[i2]
-                perms = choose_crossover((p1, p2))
+                for k in range(num_pairs):
+                    i1, i2 = parent_indices[2 * k], parent_indices[2 * k + 1]
 
-                # child[k] is derived mostly from parent[k] (exactly so for one-point
-                # crossover; for two-point it's still correct, just a less tight delta
-                # baseline), so pairing them keeps the delta-cost evaluation cheap.
-                raw_perms.extend(perms)
-                baselines.extend((p1, p2))
+                    p1, p2 = self.population[i1], self.population[i2]
+                    perms = choose_crossover((p1, p2))
+
+                    # child[k] is derived mostly from parent[k] (exactly so for one-point
+                    # crossover; for two-point it's still correct, just a less tight delta
+                    # baseline), so pairing them keeps the delta-cost evaluation cheap.
+                    raw_perms.extend(perms)
+                    baselines.extend((p1, p2))
 
             if raw_perms:
                 repaired = self.repair_batch_wrapper(np.array(raw_perms))
@@ -108,8 +119,9 @@ class BaseGA(ABC):
                 indices = np.random.randint(0, len(self.population), size=n)
                 baselines = [self.population[idx] for idx in indices]
 
-                raw_perms = np.array([choose_mutation(b.permutation, self.model) for b in baselines])
-                repaired = self.repair_batch_wrapper(raw_perms)
+                raw_perms = np.array([b.permutation for b in baselines])
+                mutated = choose_mutation_batch(raw_perms, self.model)
+                repaired = self.repair_batch_wrapper(mutated)
 
                 for perm, baseline in zip(repaired, baselines):
                     ind = evaluate_permutation_delta(baseline, perm, self.model)
