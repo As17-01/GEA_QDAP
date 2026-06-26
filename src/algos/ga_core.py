@@ -86,13 +86,13 @@ class BaseGA(ABC):
                     i1, i2 = parent_indices[2 * k], parent_indices[2 * k + 1]
 
                     p1, p2 = self.population[i1], self.population[i2]
-                    perms = choose_crossover((p1, p2))
+                    # Each child comes paired with whichever parent it shares the most
+                    # positions with (tight per crossover type, not just "child k -> parent
+                    # k"), keeping the delta-cost evaluation below cheap for both operators.
+                    (child1, baseline1), (child2, baseline2) = choose_crossover((p1, p2))
 
-                    # child[k] is derived mostly from parent[k] (exactly so for one-point
-                    # crossover; for two-point it's still correct, just a less tight delta
-                    # baseline), so pairing them keeps the delta-cost evaluation cheap.
-                    raw_perms.extend(perms)
-                    baselines.extend((p1, p2))
+                    raw_perms.extend((child1, child2))
+                    baselines.extend((baseline1, baseline2))
 
             if raw_perms:
                 repaired = self.repair_batch_wrapper(np.array(raw_perms))

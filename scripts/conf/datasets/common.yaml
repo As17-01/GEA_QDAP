@@ -3,7 +3,7 @@
 # By default only the small "debug" datasets are uncommented, so a default run stays
 # fast. Uncomment more (or all) of the lines below to run the full benchmark suite.
 names:
-  - T1
+  # - T1
   - T3
   # - T2
   # - T4
