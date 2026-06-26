@@ -2,11 +2,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-# =========================
-# Core problem definition
-# =========================
 
-
+# A GQAP problem instance.
 @dataclass(frozen=True)
 class Model:
     I: int
@@ -40,11 +37,7 @@ class Model:
                 raise ValueError(f"{name} shape mismatch: expected {expected_shape}, got {actual_arrays[name].shape}")
 
 
-# =========================
-# Genetic representation
-# =========================
-
-
+# A GA candidate solution.
 @dataclass
 class Individual:
     permutation: np.ndarray  # (J,)

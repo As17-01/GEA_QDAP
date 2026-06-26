@@ -1,11 +1,9 @@
 import numpy as np
 from numba import njit
 
-# ==========================================
-# Selection policies (Numba compiled)
-# ==========================================
 
-
+# Picks the cheapest facility with spare capacity for i_job; falls back to the
+# facility with the most slack if none fit.
 @njit
 def _select_target_greedy(i_job, aij, slack, bi, I, tol, subsample_size):
     best_target = -1
@@ -27,6 +25,8 @@ def _select_target_greedy(i_job, aij, slack, bi, I, tol, subsample_size):
     return best_target
 
 
+# Same as _select_target_greedy but only samples a random subset of facilities,
+# trading optimality for population diversity.
 @njit
 def _select_target_rf(i_job, aij, slack, bi, I, tol, subsample_size):
     k = int(I * subsample_size)
@@ -55,11 +55,8 @@ def _select_target_rf(i_job, aij, slack, bi, I, tol, subsample_size):
     return best_target
 
 
-# ==========================================
-# Shared repair core
-# ==========================================
-
-
+# Iteratively evicts each overloaded facility's heaviest job and reassigns it via
+# select_target_fn, until every facility is within capacity or attempts run out.
 @njit
 def _repair_core(perm, aij, bi, I, J, tol, max_repair_attempts, subsample_size, select_target_fn):
     loads = np.zeros(I, dtype=aij.dtype)
@@ -131,11 +128,7 @@ def _repair_core(perm, aij, bi, I, J, tol, max_repair_attempts, subsample_size, 
     return perm
 
 
-# ==========================================
-# Base class (pure greedy)
-# ==========================================
-
-
+# Repairs capacity violations by always reassigning to the cheapest feasible facility.
 class GreedyRepair:
     def __init__(self, model, tol: float = 1e-9):
         self.model = model
@@ -161,6 +154,7 @@ class GreedyRepair:
         )
 
 
+# Repairs capacity violations by reassigning to the cheapest of a random facility subset.
 class RFRepair(GreedyRepair):
     def __init__(self, model, tol: float = 1e-9, subsample_size: float = 0.2):
         super().__init__(model, tol)
