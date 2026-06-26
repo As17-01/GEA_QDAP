@@ -51,8 +51,10 @@ class Individual:
         return np.array_equal(self.permutation, other.permutation)
 
     def __hash__(self) -> int:
-        # Hash based on the permutation (converted to tuple)
-        return hash(tuple(self.permutation))
+        # .tobytes() avoids boxing every element into a Python int the way tuple() would;
+        # normalize dtype first so equal-valued arrays of different dtypes (which
+        # np.array_equal in __eq__ treats as equal) still hash the same.
+        return hash(self.permutation.astype(np.int64, copy=False).tobytes())
 
     def __repr__(self) -> str:
         return f"Individual(cost={self.cost:.4f})"

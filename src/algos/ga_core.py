@@ -5,7 +5,12 @@ from typing import List
 import numpy as np
 
 from src.algos.logger import GALogger
-from src.costs import cost_function_perm, cost_function_perm_delta, evaluate_permutation, evaluate_permutation_delta
+from src.costs import (
+    cost_function_perm,
+    cost_function_perm_delta,
+    evaluate_permutation,
+    evaluate_permutation_delta_batch,
+)
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
 from src.operators.mutations import choose_mutation
@@ -96,11 +101,9 @@ class BaseGA(ABC):
 
             if raw_perms:
                 repaired = self.repair_batch_wrapper(np.array(raw_perms))
+                offspring = evaluate_permutation_delta_batch(baselines, repaired, self.model)
 
-                for perm, baseline in zip(repaired, baselines):
-                    child = evaluate_permutation_delta(baseline, perm, self.model)
-
-                    offspring.append(child)
+                for child in offspring:
                     if math.isfinite(child.cost):
                         valid += 1
                         if child.cost < self.best_solution.cost:
@@ -121,11 +124,9 @@ class BaseGA(ABC):
 
                 raw_perms = np.array([choose_mutation(b.permutation, self.model) for b in baselines])
                 repaired = self.repair_batch_wrapper(raw_perms)
+                mutations = evaluate_permutation_delta_batch(baselines, repaired, self.model)
 
-                for perm, baseline in zip(repaired, baselines):
-                    ind = evaluate_permutation_delta(baseline, perm, self.model)
-
-                    mutations.append(ind)
+                for ind in mutations:
                     if math.isfinite(ind.cost):
                         valid += 1
                         if ind.cost < self.best_solution.cost:

@@ -1,8 +1,8 @@
 import math
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 from src.data.models import Individual, Model
 
@@ -81,6 +81,54 @@ def _cost_function_perm_delta_nb(old_perm, new_perm, old_cost, aij, cij, DIS, F,
     return np.inf, capacity_slack
 
 
+@njit(cache=True)
+def _cost_function_perm_full_nb(perm, aij, cij, DIS, F, bi, I, J):
+    """Numba-compatible full recompute, for the (rare) infeasible-baseline fallback inside
+    _evaluate_batch_nb -- can't call the plain cost_function_perm (np.ix_ etc.) from njit."""
+    loads = np.zeros(I, dtype=aij.dtype)
+    assignment_cost = 0.0
+    for j in range(J):
+        i = perm[j]
+        loads[i] += aij[i, j]
+        assignment_cost += cij[i, j]
+
+    interaction_cost = 0.0
+    for j in range(J):
+        for l in range(J):
+            interaction_cost += DIS[perm[j], perm[l]] * F[j, l]
+
+    capacity_slack = bi - loads
+    feasible = True
+    for i in range(I):
+        if capacity_slack[i] < 0:
+            feasible = False
+            break
+
+    if feasible:
+        return assignment_cost + interaction_cost, capacity_slack
+    return np.inf, capacity_slack
+
+
+@njit(parallel=True, cache=True)
+def _evaluate_batch_nb(old_perms, new_perms, old_costs, aij, cij, DIS, F, bi, I, J):
+    n = new_perms.shape[0]
+    costs = np.empty(n, dtype=np.float64)
+    slacks = np.empty((n, I), dtype=aij.dtype)
+
+    for k in prange(n):
+        old_cost = old_costs[k]
+        if np.isfinite(old_cost):
+            cost, slack = _cost_function_perm_delta_nb(
+                old_perms[k], new_perms[k], old_cost, aij, cij, DIS, F, bi, I, J
+            )
+        else:
+            cost, slack = _cost_function_perm_full_nb(new_perms[k], aij, cij, DIS, F, bi, I, J)
+        costs[k] = cost
+        slacks[k] = slack
+
+    return costs, slacks
+
+
 def cost_function_perm_delta(
     old_perm: np.ndarray, new_perm: np.ndarray, old_cost: float, model: Model
 ) -> Tuple[float, np.ndarray]:
@@ -121,3 +169,23 @@ def evaluate_permutation_delta(old_individual: Individual, new_permutation: np.n
         cost=cost,
         cvar=capacity_slack,
     )
+
+
+def evaluate_permutation_delta_batch(
+    baselines: List[Individual], new_permutations: np.ndarray, model: Model
+) -> List[Individual]:
+    """Batched evaluate_permutation_delta: one Python<->numba dispatch for the whole
+    generation's worth of offspring/mutants instead of one per individual. Each row falls
+    back to a full recompute internally if its own baseline is infeasible, same as the
+    single-individual version."""
+    old_perms = np.array([b.permutation for b in baselines])
+    old_costs = np.array([b.cost for b in baselines], dtype=np.float64)
+
+    costs, slacks = _evaluate_batch_nb(
+        old_perms, new_permutations, old_costs, model.aij, model.cij, model.DIS, model.F, model.bi, model.I, model.J
+    )
+
+    return [
+        Individual(permutation=new_permutations[k].copy(), cost=float(costs[k]), cvar=slacks[k])
+        for k in range(len(baselines))
+    ]
