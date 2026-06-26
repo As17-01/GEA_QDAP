@@ -40,13 +40,6 @@ def crossover_two_point_nb(p1: np.ndarray, p2: np.ndarray, a: int, b: int) -> Tu
     return child1, child2
 
 
-def choose_crossover(parents: Sequence[Individual]) -> Tuple[np.ndarray, np.ndarray]:
-    if np.random.randint(2) == 0:
-        return crossover_one_point(parents)
-    else:
-        return crossover_two_point(parents)
-
-
 def crossover_one_point(parents: Sequence[Individual]) -> Tuple[np.ndarray, np.ndarray]:
     p1 = parents[0].permutation
     p2 = parents[1].permutation
@@ -65,3 +58,16 @@ def crossover_two_point(parents: Sequence[Individual]) -> Tuple[np.ndarray, np.n
     a, b = np.sort(idx)
 
     return crossover_two_point_nb(p1, p2, a, b)
+
+
+# Adding a new crossover operator is just adding it here -- choose_crossover picks
+# uniformly among whatever is listed, with no separate count to remember to update.
+CROSSOVER_OPERATORS = (
+    crossover_one_point,
+    crossover_two_point,
+)
+
+
+def choose_crossover(parents: Sequence[Individual]) -> Tuple[np.ndarray, np.ndarray]:
+    op = CROSSOVER_OPERATORS[np.random.randint(len(CROSSOVER_OPERATORS))]
+    return op(parents)

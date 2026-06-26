@@ -8,7 +8,7 @@ from src.algos.logger import GALogger
 from src.costs import cost_function_perm, cost_function_perm_delta, evaluate_permutation, evaluate_permutation_delta
 from src.data.models import Individual, Model
 from src.operators.crossover import choose_crossover
-from src.operators.mutations import choose_mutation_batch
+from src.operators.mutations import choose_mutation
 from src.repair import RFRepair
 from src.selection import DiversitySelector
 
@@ -119,9 +119,8 @@ class BaseGA(ABC):
                 indices = np.random.randint(0, len(self.population), size=n)
                 baselines = [self.population[idx] for idx in indices]
 
-                raw_perms = np.array([b.permutation for b in baselines])
-                mutated = choose_mutation_batch(raw_perms, self.model)
-                repaired = self.repair_batch_wrapper(mutated)
+                raw_perms = np.array([choose_mutation(b.permutation, self.model) for b in baselines])
+                repaired = self.repair_batch_wrapper(raw_perms)
 
                 for perm, baseline in zip(repaired, baselines):
                     ind = evaluate_permutation_delta(baseline, perm, self.model)

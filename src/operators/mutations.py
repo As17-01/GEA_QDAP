@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit, prange
+from numba import njit
 
 from src.data.models import Model
 
@@ -66,62 +66,44 @@ def mutation_random_nb(perm: np.ndarray, max_value: int) -> np.ndarray:
     return result
 
 
-def choose_mutation(permutation: np.ndarray, model: Model) -> np.ndarray:
-    op = np.random.randint(4)
-
-    if op == 0:
-        return mutation_swap(permutation)
-    if op == 1:
-        return mutation_reversion(permutation)
-    if op == 2:
-        return mutation_insertion(permutation)
-    if op == 3:
-        return mutation_random(permutation, model)
-
-    return mutation_big_swap(permutation)
+# Every operator below takes (permutation, model) and returns a new permutation, even
+# though most ignore `model` -- a uniform signature so MUTATION_OPERATORS can dispatch
+# to any of them without special-casing.
 
 
-# Batched dispatch for a whole generation's worth of mutants in one compiled call,
-# instead of one Python<->numba dispatch (choose_mutation) per individual. Mirrors
-# choose_mutation's op selection exactly, including the fact that np.random.randint(4)
-# only ever yields 0-3, so mutation_big_swap is never actually selected by either path.
-@njit(parallel=True, cache=True)
-def _mutation_batch_nb(perms: np.ndarray, ops: np.ndarray, max_value: int) -> np.ndarray:
-    n = perms.shape[0]
-    for k in prange(n):
-        op = ops[k]
-        if op == 0:
-            perms[k] = mutation_swap_nb(perms[k])
-        elif op == 1:
-            perms[k] = mutation_reversion_nb(perms[k])
-        elif op == 2:
-            perms[k] = mutation_insertion_nb(perms[k])
-        else:
-            perms[k] = mutation_random_nb(perms[k], max_value)
-    return perms
-
-
-def choose_mutation_batch(permutations: np.ndarray, model: Model) -> np.ndarray:
-    n = permutations.shape[0]
-    ops = np.random.randint(0, 4, size=n)
-    return _mutation_batch_nb(permutations.copy(), ops, int(model.I))
-
-
-def mutation_swap(permutation: np.ndarray) -> np.ndarray:
+def mutation_swap(permutation: np.ndarray, model: Model) -> np.ndarray:
     return mutation_swap_nb(permutation)
 
 
-def mutation_reversion(permutation: np.ndarray) -> np.ndarray:
+def mutation_reversion(permutation: np.ndarray, model: Model) -> np.ndarray:
     return mutation_reversion_nb(permutation)
 
 
-def mutation_insertion(permutation: np.ndarray) -> np.ndarray:
+def mutation_insertion(permutation: np.ndarray, model: Model) -> np.ndarray:
     return mutation_insertion_nb(permutation)
 
 
-def mutation_big_swap(permutation: np.ndarray) -> np.ndarray:
+def mutation_big_swap(permutation: np.ndarray, model: Model) -> np.ndarray:
     return mutation_big_swap_nb(permutation)
 
 
 def mutation_random(permutation: np.ndarray, model: Model) -> np.ndarray:
     return mutation_random_nb(permutation, int(model.I))
+
+
+# Adding a new operator is just adding it here -- choose_mutation picks uniformly among
+# whatever is listed, with no separate count (and no np.random.randint(N) literal) to
+# remember to update. (Previously this dispatch used np.random.randint(4) with 5 possible
+# branches, silently making mutation_big_swap unreachable.)
+MUTATION_OPERATORS = (
+    mutation_swap,
+    mutation_reversion,
+    mutation_insertion,
+    mutation_random,
+    mutation_big_swap,
+)
+
+
+def choose_mutation(permutation: np.ndarray, model: Model) -> np.ndarray:
+    op = MUTATION_OPERATORS[np.random.randint(len(MUTATION_OPERATORS))]
+    return op(permutation, model)
