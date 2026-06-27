@@ -61,7 +61,9 @@ class DiversitySelector:
         return probs
 
     def roulette_wheel_selection(self, probabilities: np.ndarray) -> int:
-        return int(np.searchsorted(np.cumsum(probabilities), np.random.random(), side="right"))
+        cumsum = np.cumsum(probabilities)
+        idx = np.searchsorted(cumsum, np.random.random(), side="right")
+        return int(min(idx, len(probabilities) - 1))
 
     def roulette_wheel_selection_batch(self, probabilities: np.ndarray, size: int) -> np.ndarray:
         """Draw `size` parent indices at once. probabilities is constant across all of them
@@ -69,7 +71,9 @@ class DiversitySelector:
         draw (the single-draw roulette_wheel_selection above recomputes it every call)."""
         cumsum = np.cumsum(probabilities)
         draws = np.random.random(size=size)
-        return np.searchsorted(cumsum, draws, side="right")
+        # cumsum[-1] can be a hair below 1.0 due to float rounding, so a draw just under 1.0
+        # can land past it -- searchsorted would then return len(probabilities), out of range.
+        return np.minimum(np.searchsorted(cumsum, draws, side="right"), len(probabilities) - 1)
 
     def select_from_pool(self, pool: List[Individual], population_size: int, progress: float) -> List[Individual]:
         unique_pool = list(dict.fromkeys(pool))
