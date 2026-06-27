@@ -45,10 +45,12 @@ class DiversitySelector:
         beta: float = 10.0,
         diversity_weight_start: float = 0.7,
         diversity_weight_end: float = 0.2,
+        elite_fraction: float = 0.3,
     ):
         self.beta = beta
         self.diversity_weight_start = diversity_weight_start
         self.diversity_weight_end = diversity_weight_end
+        self.elite_fraction = elite_fraction
         self.avg_diversity: float = 0.0
 
     def compute_selection_probabilities(self, population: List[Individual]) -> np.ndarray:
@@ -82,7 +84,10 @@ class DiversitySelector:
         # Sort by cost (lower is better)
         unique_pool.sort(key=lambda x: x.cost)
 
-        n_elite = n // 2
+        # A smaller elite carve-out than half leaves more survivor slots decided by the
+        # cost+diversity blend below instead of pure cost, so the population doesn't lock
+        # onto a local optimum's neighborhood as fast.
+        n_elite = max(1, int(self.elite_fraction * n))
         elite = unique_pool[:n_elite]
         remaining = unique_pool[n_elite:]
 

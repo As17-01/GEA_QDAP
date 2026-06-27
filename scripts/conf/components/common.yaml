@@ -10,3 +10,4 @@ selector:
   beta: 10.0
   diversity_weight_start: 0.7
   diversity_weight_end: 0.2
+  elite_fraction: 0.2

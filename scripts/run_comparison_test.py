@@ -10,6 +10,11 @@ from comparison_utils import print_dataset_results, run_all_experiments, timesta
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+# Lets conf/run/common.yaml derive output_file from ga._target_ (e.g.
+# "...ga_adaptive.AdaptiveGA" -> "adaptive") instead of each config repeating its own
+# output filename.
+OmegaConf.register_new_resolver("algo_label", lambda target: target.rsplit(".", 1)[-1].removesuffix("GA").lower())
+
 
 @hydra.main(version_base=None, config_path="conf", config_name="standard")
 def main(cfg: DictConfig) -> None:
@@ -32,7 +37,7 @@ def main(cfg: DictConfig) -> None:
     for res in all_results:
         print_dataset_results(res)
 
-    out = SCRIPT_DIR / cfg.output_file
+    out = SCRIPT_DIR / cfg.run.output_file
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w") as f:
         json.dump(all_results, f, indent=2)

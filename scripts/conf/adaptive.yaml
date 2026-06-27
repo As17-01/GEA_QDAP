@@ -1,13 +1,9 @@
 defaults:
   - datasets: common
   - components@ga: common
+  - run: common
+  - hydra: common
   - _self_
-
-hydra:
-  run:
-    dir: .
-  job:
-    chdir: false
 
 ga:
   _target_: src.algos.ga_adaptive.AdaptiveGA
@@ -19,13 +15,3 @@ ga:
   lambda_min: 0.4
   lambda_max: 1.5
   epsilon: 1e-5
-
-run:
-  runs: 30
-  time_limit: 1000
-  # Mirrors run_test.sbatch's NUM_WORKERS env var (set there alongside pinning
-  # OMP/MKL/OPENBLAS/NUMEXPR to 1 thread each, so this multiprocessing pool is the only
-  # thing using all the allocated cores). Falls back to 4 for ad-hoc local runs.
-  workers: ${oc.env:NUM_WORKERS,4}
-
-output_file: results/adaptive.json
