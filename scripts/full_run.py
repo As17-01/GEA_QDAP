@@ -6,7 +6,7 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from comparison_utils import print_dataset_results, run_all_experiments, timestamp
+from comparison_utils import run_all_experiments, timestamp
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -33,9 +33,6 @@ def main(cfg: DictConfig) -> None:
     print(f"   GA params    : {cfg.ga}\n")
 
     all_results = run_all_experiments(datasets, algo_label, ga_cfg, time_limit, runs, workers)
-
-    for res in all_results:
-        print_dataset_results(res)
 
     out = SCRIPT_DIR / cfg.run.output_file
     out.parent.mkdir(parents=True, exist_ok=True)

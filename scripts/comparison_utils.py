@@ -15,6 +15,7 @@ for _env_var in ("NUMBA_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPE
     os.environ.setdefault(_env_var, "1")
 
 import statistics
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from typing import Dict, List
@@ -51,15 +52,16 @@ def run_single_experiment(
     seed = hash((dataset_name, algo_label, run_num)) & 0x7FFFFFFF
     seed_all(seed)
 
+    start = time.perf_counter()
     try:
         model = load_model(dataset_name)
         ga = hydra.utils.instantiate(ga_cfg, model=model)
         best = ga.run(time_limit=time_limit)
 
-        return (dataset_name, run_num, best.cost, None)
+        return (dataset_name, run_num, best.cost, time.perf_counter() - start, None)
 
     except Exception as e:
-        return (dataset_name, run_num, None, str(e))
+        return (dataset_name, run_num, None, time.perf_counter() - start, str(e))
 
 
 def run_all_experiments(
@@ -77,7 +79,9 @@ def run_all_experiments(
     """
     tasks = [(ds, r) for ds in datasets for r in range(1, runs + 1)]
     results_by_dataset: Dict[str, List[float]] = {ds: [] for ds in datasets}
+    runtimes_by_dataset: Dict[str, List[float]] = {ds: [] for ds in datasets}
     errors_by_dataset: Dict[str, int] = {ds: 0 for ds in datasets}
+    completed_by_dataset: Dict[str, int] = {ds: 0 for ds in datasets}
 
     print(f"   Running {len(tasks)} experiments ({len(datasets)} datasets x {runs} runs) across {workers} workers...")
 
@@ -86,30 +90,35 @@ def run_all_experiments(
             executor.submit(run_single_experiment, ds, algo_label, r, ga_cfg, time_limit): (ds, r) for ds, r in tasks
         }
 
-        completed = 0
         for future in as_completed(futures):
-            ds, r = futures[future]
-            _, _, cost, err = future.result()
-            completed += 1
+            ds, _ = futures[future]
+            _, _, cost, runtime, err = future.result()
 
+            runtimes_by_dataset[ds].append(runtime)
             if err:
                 errors_by_dataset[ds] += 1
-                print(f"   [{completed}/{len(tasks)}] {ds} run {r}/{runs} [ERROR] {err}")
             else:
                 results_by_dataset[ds].append(cost)
-                print(f"   [{completed}/{len(tasks)}] {ds} run {r}/{runs} → cost = {cost:.2f}")
+            completed_by_dataset[ds] += 1
+
+            # Print one aggregated line per dataset, once all its runs are in, instead of
+            # one line per individual run -- with many datasets/runs/workers running at
+            # once, per-run lines from concurrent futures interleave into unreadable noise.
+            if completed_by_dataset[ds] == runs:
+                stats = calculate_statistics(results_by_dataset[ds])
+                total_runtime = sum(runtimes_by_dataset[ds])
+                error_note = f" ({errors_by_dataset[ds]} errors)" if errors_by_dataset[ds] else ""
+                print(
+                    f"   {ds} run → avg cost = {stats['mean']:.2f} ; std = {stats['std']:.2f} ; "
+                    f"total runtime = {total_runtime:.2f}s{error_note}"
+                )
 
     return [
         {
             "dataset": ds,
             "results": {algo_label: calculate_statistics(results_by_dataset[ds])},
+            "runtime": {algo_label: {**calculate_statistics(runtimes_by_dataset[ds]), "total": sum(runtimes_by_dataset[ds])}},
             "errors": errors_by_dataset[ds],
         }
         for ds in datasets
     ]
-
-
-def print_dataset_results(res: dict) -> None:
-    print("   Results:")
-    for algo, stats in res["results"].items():
-        print(f"     {algo:10s} | mean={stats['mean']:8.2f} | min={stats['min']:8.2f} | std={stats['std']:6.2f}")

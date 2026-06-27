@@ -15,6 +15,7 @@ class StandardGA(BaseGA):
         selector=None,
         stagnation_limit=30,
         immigrant_rate=0.1,
+        verbose=False,
     ):
         super().__init__(
             model,
@@ -24,6 +25,7 @@ class StandardGA(BaseGA):
             selector=selector,
             stagnation_limit=stagnation_limit,
             immigrant_rate=immigrant_rate,
+            verbose=verbose,
         )
         self.crossover_rate = crossover_rate
         self.mutation_rate = mutation_rate

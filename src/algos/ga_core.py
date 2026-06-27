@@ -34,10 +34,12 @@ class BaseGA(ABC):
         selector: DiversitySelector | None = None,
         stagnation_limit: int = 30,
         immigrant_rate: float = 0.1,
+        verbose: bool = False,
     ):
         self.model = model
         self.population_size = population_size
         self.iterations = iterations
+        self.verbose = verbose
 
         self.repair_class = repair_class if repair_class is not None else RFRepair()
         self.selector = selector if selector is not None else DiversitySelector()
@@ -232,7 +234,8 @@ class BaseGA(ABC):
         self.logger.start_run()
         self.initialize_population()
 
-        print(f"GA started → Population: {self.population_size:,} | Iterations: {self.iterations}\n")
+        if self.verbose:
+            print(f"GA started → Population: {self.population_size:,} | Iterations: {self.iterations}\n")
 
         for it in range(1, self.iterations + 1):
             self.progress = it / self.iterations
@@ -249,12 +252,15 @@ class BaseGA(ABC):
             self.worst_cost = max(self.worst_cost, self.population[-1].cost)
 
             if it % 50 == 0:
-                self.logger.print_iteration_info(it, iter_time, self.best_solution.cost, self.selector.avg_diversity)
+                if self.verbose:
+                    self.logger.print_iteration_info(it, iter_time, self.best_solution.cost, self.selector.avg_diversity)
                 self.logger.reset_operator_counters()
 
             if time_limit and self.logger.elapsed() >= time_limit:
-                print(f"Time limit reached at iteration {it}")
+                if self.verbose:
+                    print(f"Time limit reached at iteration {it}")
                 break
 
-        self.logger.print_final_report(self.best_solution.cost)
+        if self.verbose:
+            self.logger.print_final_report(self.best_solution.cost)
         return self.best_solution

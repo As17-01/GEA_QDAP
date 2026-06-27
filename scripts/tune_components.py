@@ -57,7 +57,10 @@ def effective_mean(dataset_entry: dict, runs: int) -> float:
 def evaluate(components: dict, base_ga_cfg: dict, datasets: list[str], runs: int, time_limit: float, workers: int) -> dict:
     ga_cfg = apply_components(base_ga_cfg, components)
     per_dataset_results = run_all_experiments(datasets, "Standard", ga_cfg, time_limit, runs, workers)
-    return {res["dataset"]: {**res["results"]["Standard"], "errors": res["errors"]} for res in per_dataset_results}
+    return {
+        res["dataset"]: {**res["results"]["Standard"], "runtime": res["runtime"]["Standard"], "errors": res["errors"]}
+        for res in per_dataset_results
+    }
 
 
 def relative_score(per_dataset: dict, baseline_per_dataset: dict, datasets: list[str], runs: int) -> float:
