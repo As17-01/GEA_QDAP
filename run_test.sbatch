@@ -16,4 +16,4 @@ export NUM_WORKERS=16
 module load Python
 source activate gea_gqap_env
 
-poetry run python scripts/run_comparison_test.py --config-name=standard
+poetry run python scripts/full_run.py --config-name=standard

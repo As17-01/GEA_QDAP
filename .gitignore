@@ -220,5 +220,5 @@ __marimo__/
 .claude
 .vscode
 .hydra/
-run_comparison_test.log
+full_run.log
 scripts/results/

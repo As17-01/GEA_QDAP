@@ -6,6 +6,6 @@ time_limit: 1000
 # thing using all the allocated cores). Falls back to 4 for ad-hoc local runs.
 workers: ${oc.env:NUM_WORKERS,4}
 # Derived from ga._target_ (e.g. "...ga_adaptive.AdaptiveGA" -> "adaptive") via the
-# algo_label resolver registered in run_comparison_test.py, so each config doesn't need to
+# algo_label resolver registered in full_run.py, so each config doesn't need to
 # repeat its own output filename.
 output_file: results/${algo_label:${ga._target_}}.json
