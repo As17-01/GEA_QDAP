@@ -26,7 +26,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-@hydra.main(version_base=None, config_path="conf", config_name="tune")
+@hydra.main(version_base=None, config_path="conf", config_name="tune_components")
 def main(cfg: DictConfig) -> None:
     datasets = list(cfg.datasets.names)
     time_limit = cfg.run.time_limit

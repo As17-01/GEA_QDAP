@@ -4,7 +4,7 @@ defaults:
 
 tune:
   runs: 5
-  n_candidates: 12
+  n_candidates: 30
   seed: 0
   ga_path: conf/standard.yaml
   output_file: results/tune_algorithm_${now:%Y%m%d_%H%M%S}.json
