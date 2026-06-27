@@ -91,10 +91,14 @@ class DiversitySelector:
         # Normalize costs so lower cost -> higher score
         costs = np.array([ind.cost for ind in remaining], dtype=float)
 
-        if len(costs) > 1 and costs.max() != costs.min():
-            cost_scores = 1.0 - (costs - costs.min()) / (costs.max() - costs.min())
+        finite = np.isfinite(costs)
+        finite_costs = costs[finite]
+
+        if finite_costs.size > 1 and finite_costs.max() != finite_costs.min():
+            cost_scores = np.zeros_like(costs)
+            cost_scores[finite] = 1.0 - (finite_costs - finite_costs.min()) / (finite_costs.max() - finite_costs.min())
         else:
-            cost_scores = np.ones_like(costs)
+            cost_scores = finite.astype(float)
 
         # Decay diversity pressure over the run so the population can settle
         # onto the best cost found instead of being pinned apart by diversity.
