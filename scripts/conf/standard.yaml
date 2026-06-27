@@ -11,4 +11,6 @@ ga:
   iterations: 1000
   crossover_rate: 0.7
   mutation_rate: 0.3
+  stagnation_limit: 30
+  immigrant_rate: 0.1
   verbose: false

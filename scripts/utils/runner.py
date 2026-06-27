@@ -21,9 +21,16 @@ from datetime import datetime
 from typing import Dict, List
 
 import hydra
+from omegaconf import OmegaConf
 
 from src.data.model_loader import load_model
 from src.seeding import seed_all
+
+# Lets conf/run/common.yaml derive output_file from ga._target_ (e.g.
+# "...ga_adaptive.AdaptiveGA" -> "adaptive") instead of each config repeating its own output
+# filename. Registered here (imported by every entry-point script before its @hydra.main
+# composes a config) rather than in each script, so it's done exactly once.
+OmegaConf.register_new_resolver("algo_label", lambda target: target.rsplit(".", 1)[-1].removesuffix("GA").lower(), replace=True)
 
 
 def timestamp() -> str:

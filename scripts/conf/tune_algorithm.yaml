@@ -1,0 +1,18 @@
+defaults:
+  - standard
+  - _self_
+
+tune:
+  runs: 5
+  n_candidates: 12
+  seed: 0
+  ga_path: conf/standard.yaml
+  output_file: results/tune_algorithm_${now:%Y%m%d_%H%M%S}.json
+  # [low, high] bounds for Optuna's TPE sampler. Both bounds plain ints (stagnation_limit)
+  # are searched as integers; population_size/iterations are left out -- they're compute
+  # budget, not a search/diversity tradeoff knob like these.
+  param_space:
+    crossover_rate: [0.4, 0.9]
+    mutation_rate: [0.1, 0.6]
+    stagnation_limit: [10, 60]
+    immigrant_rate: [0.02, 0.3]

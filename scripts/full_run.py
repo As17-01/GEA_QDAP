@@ -6,14 +6,9 @@ from pathlib import Path
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from comparison_utils import run_all_experiments, timestamp
+from utils.runner import run_all_experiments, timestamp
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-
-# Lets conf/run/common.yaml derive output_file from ga._target_ (e.g.
-# "...ga_adaptive.AdaptiveGA" -> "adaptive") instead of each config repeating its own
-# output filename.
-OmegaConf.register_new_resolver("algo_label", lambda target: target.rsplit(".", 1)[-1].removesuffix("GA").lower())
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="standard")

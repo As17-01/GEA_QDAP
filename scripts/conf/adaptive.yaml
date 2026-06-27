@@ -15,4 +15,6 @@ ga:
   lambda_min: 0.4
   lambda_max: 1.5
   epsilon: 1e-5
+  stagnation_limit: 30
+  immigrant_rate: 0.1
   verbose: false
