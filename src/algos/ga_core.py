@@ -1,6 +1,6 @@
 import math
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 
@@ -32,6 +32,8 @@ class BaseGA(ABC):
         iterations: int,
         repair_class=None,
         selector: DiversitySelector | None = None,
+        stagnation_limit: int = 30,
+        immigrant_rate: float = 0.1,
     ):
         self.model = model
         self.population_size = population_size
@@ -46,6 +48,16 @@ class BaseGA(ABC):
         self.best_solution: Individual | None = None
         self.worst_cost: float = float("inf")
         self.progress: float = 0.0
+
+        # Stagnation-triggered random immigrants: a fixed mutation/crossover rate (or one
+        # that only ever shrinks, as in AdaptiveGA) has no mechanism to react when the
+        # population has actually converged on a local optimum -- this injects fresh random
+        # individuals once `best_solution` has gone `stagnation_limit` iterations without
+        # improving, giving crossover new material to recombine with.
+        self.stagnation_limit = stagnation_limit
+        self.immigrant_rate = immigrant_rate
+        self.stagnation_counter = 0
+        self._last_best_cost = float("inf")
 
     def repair_batch_wrapper(self, perms: np.ndarray) -> np.ndarray:
         with self.logger.timed("repair"):
@@ -70,7 +82,7 @@ class BaseGA(ABC):
         with self.logger.timed("survivor_selection"):
             self.population = self.selector.select_from_pool(pool, self.population_size, self.progress)
 
-    def crossover(self, probabilities: np.ndarray, n: int) -> List[Individual]:
+    def crossover(self, probabilities: np.ndarray, n: int) -> List[Tuple[Individual, Individual]]:
         offspring = []
         valid = 0
         new_best = 0
@@ -101,9 +113,10 @@ class BaseGA(ABC):
 
             if raw_perms:
                 repaired = self.repair_batch_wrapper(np.array(raw_perms))
-                offspring = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                offspring = list(zip(children, baselines))
 
-                for child in offspring:
+                for child in children:
                     if math.isfinite(child.cost):
                         valid += 1
                         if child.cost < self.best_solution.cost:
@@ -112,7 +125,7 @@ class BaseGA(ABC):
         self.logger.record_crossover(n, valid, new_best)
         return offspring
 
-    def mutate(self, n: int) -> List[Individual]:
+    def mutate(self, n: int) -> List[Tuple[Individual, Individual]]:
         mutations = []
         valid = 0
         new_best = 0
@@ -124,9 +137,10 @@ class BaseGA(ABC):
 
                 raw_perms = np.array([choose_mutation(b.permutation, self.model) for b in baselines])
                 repaired = self.repair_batch_wrapper(raw_perms)
-                mutations = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                mutations = list(zip(children, baselines))
 
-                for ind in mutations:
+                for ind in children:
                     if math.isfinite(ind.cost):
                         valid += 1
                         if ind.cost < self.best_solution.cost:
@@ -134,6 +148,35 @@ class BaseGA(ABC):
 
         self.logger.record_mutation(n, valid, new_best)
         return mutations
+
+    def generate_immigrants(self, n: int) -> List[Individual]:
+        if n <= 0:
+            return []
+
+        with self.logger.timed("immigrants"):
+            perms = np.random.randint(0, self.model.I, size=(n, self.model.J), dtype=int)
+            perms = self.repair_batch_wrapper(perms)
+            return [evaluate_permutation(perms[i], self.model) for i in range(n)]
+
+    def maybe_generate_immigrants(self) -> List[Individual]:
+        """Called once per step, before this iteration's offspring/mutants are folded into
+        the pool. `self.best_solution` still reflects the *previous* iteration's result here
+        (run() updates it after step() returns), so this compares consecutive iterations and
+        resets the counter on any improvement."""
+        if self.best_solution is not None and self.best_solution.cost < self._last_best_cost - 1e-9:
+            self.stagnation_counter = 0
+        else:
+            self.stagnation_counter += 1
+
+        if self.best_solution is not None:
+            self._last_best_cost = min(self._last_best_cost, self.best_solution.cost)
+
+        if self.stagnation_counter < self.stagnation_limit:
+            return []
+
+        self.stagnation_counter = 0
+        n = max(1, int(self.immigrant_rate * self.population_size))
+        return self.generate_immigrants(n)
 
     def local_search(self, perm: np.ndarray) -> np.ndarray:
         """Hill-climb by reassigning one job at a time to its best feasible facility."""

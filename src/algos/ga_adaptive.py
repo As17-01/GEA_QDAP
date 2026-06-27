@@ -1,3 +1,5 @@
+import math
+
 from src.algos.ga_core import BaseGA
 
 
@@ -15,8 +17,18 @@ class AdaptiveGA(BaseGA):
         epsilon=1e-5,
         repair_class=None,
         selector=None,
+        stagnation_limit=30,
+        immigrant_rate=0.1,
     ):
-        super().__init__(model, population_size, iterations, repair_class=repair_class, selector=selector)
+        super().__init__(
+            model,
+            population_size,
+            iterations,
+            repair_class=repair_class,
+            selector=selector,
+            stagnation_limit=stagnation_limit,
+            immigrant_rate=immigrant_rate,
+        )
 
         self.base_crossover = crossover_rate
         self.base_mutation = mutation_rate
@@ -42,25 +54,31 @@ class AdaptiveGA(BaseGA):
         crossover_delta = 0.0
         mutation_delta = 0.0
 
-        # Generate offspring from crossover
+        # Generate offspring from crossover. Delta is measured against each child's own
+        # parent baseline (not the global best) -- comparing every child to the best-ever
+        # solution makes delta almost always negative once the population is decent, which
+        # drove both lambdas toward lambda_min exactly as the run converged, choking off the
+        # exploration needed to escape a local optimum.
         offspring = []
-        for child in self.crossover(probs, ncrossover):
-            parent_cost = self.best_solution.cost
-            delta = (parent_cost - child.cost) / (parent_cost + self.epsilon)
-            crossover_delta += delta
+        for child, baseline in self.crossover(probs, ncrossover):
+            parent_cost = baseline.cost
+            if math.isfinite(parent_cost) and math.isfinite(child.cost):
+                crossover_delta += (parent_cost - child.cost) / (parent_cost + self.epsilon)
             offspring.append(child)
 
         # Generate mutations
         mutations = []
-        for child in self.mutate(nmutation):
-            parent_cost = self.best_solution.cost
-            delta = (parent_cost - child.cost) / (parent_cost + self.epsilon)
-            mutation_delta += delta
+        for child, baseline in self.mutate(nmutation):
+            parent_cost = baseline.cost
+            if math.isfinite(parent_cost) and math.isfinite(child.cost):
+                mutation_delta += (parent_cost - child.cost) / (parent_cost + self.epsilon)
             mutations.append(child)
 
         # Update adaptive parameters
         self.lambda_crossover = self._update_lambda(self.lambda_crossover, crossover_delta)
         self.lambda_mutation = self._update_lambda(self.lambda_mutation, mutation_delta)
 
-        pool = self.population + offspring + mutations
+        immigrants = self.maybe_generate_immigrants()
+
+        pool = self.population + offspring + mutations + immigrants
         self.select_from_pool(pool)
