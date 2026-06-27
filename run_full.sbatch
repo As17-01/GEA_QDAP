@@ -14,6 +14,6 @@ export NUMEXPR_NUM_THREADS=1
 export NUM_WORKERS=16
 
 module load Python
-source activate gea_gqap_env
+source activate gea_gqap_v2_env
 
 poetry run python scripts/full_run.py --config-name=standard
