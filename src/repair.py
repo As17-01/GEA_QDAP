@@ -121,122 +121,122 @@ def _select_evict_rf(perm, aij, slack, tol, J, subsample_size):
 # Iteratively evicts an overloaded facility's job (chosen via select_evict_fn) and
 # reassigns it via select_target_fn, until every facility is within capacity or attempts
 # run out.
-@njit(cache=True)
-def _repair_core(perm, aij, bi, I, J, tol, max_repair_attempts, subsample_size, select_target_fn, select_evict_fn):
-    loads = np.zeros(I, dtype=aij.dtype)
+#
+# select_target_fn/select_evict_fn are captured as closure constants (baked in at compile
+# time by _make_repair_core below) rather than passed in as runtime arguments. Passing other
+# njit dispatchers in as *arguments* to a cache=True function is unsafe: numba's on-disk
+# cache needs a weakref to whichever dispatcher object was passed in to persist the cache
+# index, and that weakref can already be dead by save time, raising
+# "ReferenceError: underlying object has vanished" (a numba limitation). Capturing them as
+# closures instead avoids that entirely -- the compiled function's identity no longer depends
+# on a runtime dispatcher reference -- so this keeps the disk-cache benefit (~seconds of JIT
+# compilation per cold process, otherwise repeated on every fresh worker process).
+def _make_repair_core(select_target_fn, select_evict_fn):
+    @njit(cache=True)
+    def _repair_core(perm, aij, bi, I, J, tol, max_repair_attempts, subsample_size):
+        loads = np.zeros(I, dtype=aij.dtype)
 
-    for j in range(J):
-        i = perm[j]
-        loads[i] += aij[i, j]
+        for j in range(J):
+            i = perm[j]
+            loads[i] += aij[i, j]
 
-    slack = bi - loads
+        slack = bi - loads
 
-    attempts = 0
+        attempts = 0
 
-    while attempts < max_repair_attempts:
-        attempts += 1
+        while attempts < max_repair_attempts:
+            attempts += 1
 
-        # Check overload
-        overloaded_exists = False
-        for i in range(I):
-            if slack[i] < -tol:
-                overloaded_exists = True
-                break
-        if not overloaded_exists:
-            break
-
-        # Removal via strategy
-        best_j = select_evict_fn(perm, aij, slack, tol, J, subsample_size)
-
-        if best_j == -1:
-            break
-
-        i_old = perm[best_j]
-
-        # Remove
-        loads[i_old] -= aij[i_old, best_j]
-        slack[i_old] = bi[i_old] - loads[i_old]
-        perm[best_j] = -1
-
-        # Insert via strategy
-        target = select_target_fn(best_j, aij, slack, bi, I, tol, subsample_size)
-
-        # Assign
-        perm[best_j] = target
-        loads[target] += aij[target, best_j]
-        slack[target] = bi[target] - loads[target]
-
-    # Final safety pass
-    for j in range(J):
-        if perm[j] == -1:
-            best_target = 0
-            max_slack = -1e18
+            # Check overload
+            overloaded_exists = False
             for i in range(I):
-                if slack[i] > max_slack:
-                    max_slack = slack[i]
-                    best_target = i
+                if slack[i] < -tol:
+                    overloaded_exists = True
+                    break
+            if not overloaded_exists:
+                break
 
-            perm[j] = best_target
-            loads[best_target] += aij[best_target, j]
-            slack[best_target] = bi[best_target] - loads[best_target]
+            # Removal via strategy
+            best_j = select_evict_fn(perm, aij, slack, tol, J, subsample_size)
 
-    return perm
+            if best_j == -1:
+                break
+
+            i_old = perm[best_j]
+
+            # Remove
+            loads[i_old] -= aij[i_old, best_j]
+            slack[i_old] = bi[i_old] - loads[i_old]
+            perm[best_j] = -1
+
+            # Insert via strategy
+            target = select_target_fn(best_j, aij, slack, bi, I, tol, subsample_size)
+
+            # Assign
+            perm[best_j] = target
+            loads[target] += aij[target, best_j]
+            slack[target] = bi[target] - loads[target]
+
+        # Final safety pass
+        for j in range(J):
+            if perm[j] == -1:
+                best_target = 0
+                max_slack = -1e18
+                for i in range(I):
+                    if slack[i] > max_slack:
+                        max_slack = slack[i]
+                        best_target = i
+
+                perm[j] = best_target
+                loads[best_target] += aij[best_target, j]
+                slack[best_target] = bi[best_target] - loads[best_target]
+
+        return perm
+
+    return _repair_core
 
 
 # Repairs a whole batch of permutations in one call -- each row is independent, so this
 # runs across cores via prange instead of paying per-individual Python<->numba dispatch
 # overhead for every offspring/mutant in a generation.
-@njit(parallel=True, cache=True)
-def _repair_core_batch(perms, aij, bi, I, J, tol, max_repair_attempts, subsample_size, select_target_fn, select_evict_fn):
-    n = perms.shape[0]
-    for idx in prange(n):
-        perms[idx] = _repair_core(
-            perms[idx], aij, bi, I, J, tol, max_repair_attempts, subsample_size, select_target_fn, select_evict_fn
-        )
-    return perms
+def _make_repair_core_batch(repair_core_fn):
+    @njit(parallel=True, cache=True)
+    def _repair_core_batch(perms, aij, bi, I, J, tol, max_repair_attempts, subsample_size):
+        n = perms.shape[0]
+        for idx in prange(n):
+            perms[idx] = repair_core_fn(perms[idx], aij, bi, I, J, tol, max_repair_attempts, subsample_size)
+        return perms
+
+    return _repair_core_batch
+
+
+# One compiled (and cached) repair_core/repair_core_batch pair per strategy, built once at
+# import time -- GreedyRepair/RFRepair below just pick which pair to call.
+_repair_core_greedy = _make_repair_core(_select_target_greedy, _select_evict_greedy)
+_repair_core_batch_greedy = _make_repair_core_batch(_repair_core_greedy)
+
+_repair_core_rf = _make_repair_core(_select_target_rf, _select_evict_rf)
+_repair_core_batch_rf = _make_repair_core_batch(_repair_core_rf)
 
 
 # Repairs capacity violations by always evicting the worst violation and reassigning to
 # the cheapest feasible facility -- fully deterministic.
 class GreedyRepair:
+    _repair_core = staticmethod(_repair_core_greedy)
+    _repair_core_batch = staticmethod(_repair_core_batch_greedy)
+
     def __init__(self, tol: float = 1e-9):
         self.tol = tol
-
-    def _get_target_selector(self):
-        return _select_target_greedy
-
-    def _get_evict_selector(self):
-        return _select_evict_greedy
-
-    def _get_subsample_size(self):
-        return 0  # unused
+        self.subsample_size = 0  # unused by the greedy strategy
 
     def repair(self, perm: np.ndarray, model, max_repair_attempts: int = 100) -> np.ndarray:
-        return _repair_core(
-            perm.copy(),
-            model.aij,
-            model.bi,
-            model.I,
-            model.J,
-            self.tol,
-            max_repair_attempts,
-            self._get_subsample_size(),
-            self._get_target_selector(),
-            self._get_evict_selector(),
+        return self._repair_core(
+            perm.copy(), model.aij, model.bi, model.I, model.J, self.tol, max_repair_attempts, self.subsample_size
         )
 
     def repair_batch(self, perms: np.ndarray, model, max_repair_attempts: int = 100) -> np.ndarray:
-        return _repair_core_batch(
-            perms.copy(),
-            model.aij,
-            model.bi,
-            model.I,
-            model.J,
-            self.tol,
-            max_repair_attempts,
-            self._get_subsample_size(),
-            self._get_target_selector(),
-            self._get_evict_selector(),
+        return self._repair_core_batch(
+            perms.copy(), model.aij, model.bi, model.I, model.J, self.tol, max_repair_attempts, self.subsample_size
         )
 
 
@@ -244,15 +244,9 @@ class GreedyRepair:
 # candidates (a share of the candidate pool, not an absolute count) -- trades exact
 # greediness for population diversity.
 class RFRepair(GreedyRepair):
+    _repair_core = staticmethod(_repair_core_rf)
+    _repair_core_batch = staticmethod(_repair_core_batch_rf)
+
     def __init__(self, tol: float = 1e-9, subsample_size: float = 0.2):
         super().__init__(tol)
         self.subsample_size = subsample_size
-
-    def _get_target_selector(self):
-        return _select_target_rf
-
-    def _get_evict_selector(self):
-        return _select_evict_rf
-
-    def _get_subsample_size(self):
-        return self.subsample_size
