@@ -94,7 +94,7 @@ class BaseGA(ABC):
                     # Each child comes paired with whichever parent it shares the most
                     # positions with (tight per crossover type, not just "child k -> parent
                     # k"), keeping the delta-cost evaluation below cheap for both operators.
-                    (child1, baseline1), (child2, baseline2) = choose_crossover((p1, p2))
+                    (child1, baseline1), (child2, baseline2) = choose_crossover((p1, p2), self.model)
 
                     raw_perms.extend((child1, child2))
                     baselines.extend((baseline1, baseline2))

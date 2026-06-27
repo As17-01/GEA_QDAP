@@ -3,7 +3,7 @@ from typing import Sequence, Tuple
 import numpy as np
 from numba import njit
 
-from src.data.models import Individual
+from src.data.models import Individual, Model
 
 # Each child paired with whichever parent it shares the most positions with -- the
 # tightest baseline for delta-cost evaluation (see evaluate_permutation_delta).
@@ -44,7 +44,50 @@ def crossover_two_point_nb(p1: np.ndarray, p2: np.ndarray, a: int, b: int) -> Tu
     return child1, child2
 
 
-def crossover_one_point(parents: Sequence[Individual]) -> CrossoverResult:
+@njit(fastmath=True, cache=True)
+def crossover_uniform_nb(p1: np.ndarray, p2: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray, int]:
+    n = len(p1)
+
+    child1 = np.empty(n, dtype=p1.dtype)
+    child2 = np.empty(n, dtype=p1.dtype)
+    n_match_p1 = 0
+
+    for j in range(n):
+        if mask[j]:
+            child1[j] = p1[j]
+            child2[j] = p2[j]
+            n_match_p1 += 1
+        else:
+            child1[j] = p2[j]
+            child2[j] = p1[j]
+
+    return child1, child2, n_match_p1
+
+
+@njit(fastmath=True, cache=True)
+def crossover_greedy_nb(p1: np.ndarray, p2: np.ndarray, cij: np.ndarray) -> Tuple[np.ndarray, np.ndarray, int]:
+    """Per-position, child1 takes whichever parent's assignment is cheaper for that job
+    (exploitation); child2 takes the other one (the complementary, worse-of pairing) so the
+    pair still spans the same diversity a random crossover would."""
+    n = len(p1)
+
+    child1 = np.empty(n, dtype=p1.dtype)
+    child2 = np.empty(n, dtype=p1.dtype)
+    n_match_p1 = 0
+
+    for j in range(n):
+        if cij[p1[j], j] <= cij[p2[j], j]:
+            child1[j] = p1[j]
+            child2[j] = p2[j]
+            n_match_p1 += 1
+        else:
+            child1[j] = p2[j]
+            child2[j] = p1[j]
+
+    return child1, child2, n_match_p1
+
+
+def crossover_one_point(parents: Sequence[Individual], model: Model) -> CrossoverResult:
     p1, p2 = parents[0], parents[1]
     n = len(p1.permutation)
 
@@ -56,7 +99,7 @@ def crossover_one_point(parents: Sequence[Individual]) -> CrossoverResult:
     return (child1, p1), (child2, p2)
 
 
-def crossover_two_point(parents: Sequence[Individual]) -> CrossoverResult:
+def crossover_two_point(parents: Sequence[Individual], model: Model) -> CrossoverResult:
     p1, p2 = parents[0], parents[1]
     n = len(p1.permutation)
 
@@ -70,14 +113,43 @@ def crossover_two_point(parents: Sequence[Individual]) -> CrossoverResult:
     return (child1, p2), (child2, p1)
 
 
+def _pair_by_match_count(child1: np.ndarray, child2: np.ndarray, n_match_p1: int, n: int, p1: Individual, p2: Individual) -> CrossoverResult:
+    # child1 matches p1 at n_match_p1 positions and p2 at the rest; child2 is the mirror
+    # image (matches p2 at n_match_p1, p1 at the rest) -- pair each with its closer parent.
+    if n_match_p1 >= n - n_match_p1:
+        return (child1, p1), (child2, p2)
+    return (child1, p2), (child2, p1)
+
+
+def crossover_uniform(parents: Sequence[Individual], model: Model) -> CrossoverResult:
+    p1, p2 = parents[0], parents[1]
+    n = len(p1.permutation)
+
+    mask = np.random.random(n) < 0.5
+    child1, child2, n_match_p1 = crossover_uniform_nb(p1.permutation, p2.permutation, mask)
+
+    return _pair_by_match_count(child1, child2, n_match_p1, n, p1, p2)
+
+
+def crossover_greedy(parents: Sequence[Individual], model: Model) -> CrossoverResult:
+    p1, p2 = parents[0], parents[1]
+    n = len(p1.permutation)
+
+    child1, child2, n_match_p1 = crossover_greedy_nb(p1.permutation, p2.permutation, model.cij)
+
+    return _pair_by_match_count(child1, child2, n_match_p1, n, p1, p2)
+
+
 # Adding a new crossover operator is just adding it here -- choose_crossover picks
 # uniformly among whatever is listed, with no separate count to remember to update.
 CROSSOVER_OPERATORS = (
     crossover_one_point,
     crossover_two_point,
+    crossover_uniform,
+    crossover_greedy,
 )
 
 
-def choose_crossover(parents: Sequence[Individual]) -> CrossoverResult:
+def choose_crossover(parents: Sequence[Individual], model: Model) -> CrossoverResult:
     op = CROSSOVER_OPERATORS[np.random.randint(len(CROSSOVER_OPERATORS))]
-    return op(parents)
+    return op(parents, model)
