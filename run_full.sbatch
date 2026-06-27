@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=gea_gqap_test
-#SBATCH --error=gea_gqap_test-%j.err
-#SBATCH --output=gea_gqap_test-%j.log
+#SBATCH --job-name=gea_gqap_full
+#SBATCH --error=gea_gqap_full-%j.err
+#SBATCH --output=gea_gqap_full-%j.log
 #SBATCH --time=336:00:00
 #SBATCH --cpus-per-task=16
 #SBATCH --nodes=1
