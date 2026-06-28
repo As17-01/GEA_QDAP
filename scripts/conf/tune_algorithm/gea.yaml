@@ -1,5 +1,6 @@
+# @package _global_
 defaults:
-  - gea
+  - /gea
   - _self_
 
 tune:
@@ -7,7 +8,7 @@ tune:
   n_candidates: 30
   seed: 0
   ga_path: conf/gea.yaml
-  output_file: results/tune_algorithm_${now:%Y%m%d_%H%M%S}.json
+  output_file: results/tune_algorithm_gea_${now:%Y%m%d_%H%M%S}.json
   # [low, high] bounds for Optuna's TPE sampler. Both bounds plain ints (stagnation_limit)
   # are searched as integers; population_size/iterations are left out -- they're compute
   # budget, not a search/diversity tradeoff knob like these.

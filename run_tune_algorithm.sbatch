@@ -16,4 +16,20 @@ export NUM_WORKERS=16
 module load Python
 source activate gea_gqap_v2_env
 
-poetry run python scripts/tune_algorithm.py
+ALGORITHMS=(
+    standard
+    gea
+    adaptive
+    sa
+    pso
+    hybrid_ga_pso
+    hybrid_ga_sa
+    gea_scenario_1
+    gea_scenario_2
+    gea_scenario_3
+)
+
+for algo in "${ALGORITHMS[@]}"; do
+    echo "=== Tuning ${algo} ==="
+    poetry run python scripts/tune_algorithm.py --config-name="tune_algorithm/${algo}"
+done

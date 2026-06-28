@@ -69,9 +69,15 @@ src/
 datasets/  # Benchmark instances (e.g. c201535, T1-T14)
 scripts/
 ├── run.py             # Hydra-driven benchmark runner (any algorithm config)
-├── tune_algorithm.py  # Optuna tuning of GEA's rate/stagnation knobs
+├── tune_algorithm.py  # Optuna tuning of any algorithm's rate/threshold knobs
 ├── tune_components.py # Optuna tuning of GEA's repair/selector knobs
-└── conf/              # One Hydra config per algorithm (standard.yaml, gea.yaml, ...)
+└── conf/
+    ├── standard.yaml, gea.yaml, adaptive.yaml, sa.yaml, pso.yaml, ...  # one per algorithm
+    └── tune_algorithm/  # one tuning config per algorithm (param_space + ga_path)
+
+run_full.sbatch            # Slurm: runs every algorithm's config, one after another
+run_tune_algorithm.sbatch  # Slurm: runs scripts/tune_algorithm.py for every algorithm
+run_tune_components.sbatch # Slurm: runs scripts/tune_components.py (GEA only)
 ```
 
 ## Usage
@@ -120,9 +126,24 @@ e.g. `python3 scripts/run.py --config-name=adaptive ga.population_size=500 run.r
 ### Tuning
 
 ```bash
-python3 scripts/tune_algorithm.py    # tunes GEA's crossover_rate/mutation_rate/stagnation_limit/immigrant_rate
-python3 scripts/tune_components.py   # tunes GEA's repair_class/selector knobs
+python3 scripts/tune_algorithm.py --config-name=tune_algorithm/gea  # or .../standard / .../sa / ...
+python3 scripts/tune_components.py                                   # GEA's repair_class/selector knobs only
 ```
 
+`tune_algorithm.py` works against whichever algorithm
+`scripts/conf/tune_algorithm/<algo>.yaml` selects — each one lists that algorithm's own
+rate/threshold knobs as `tune.param_space` (e.g. `crossover_rate`/`mutation_rate` for
+`StandardGA`, `initial_temperature`/`cooling_rate` for `SimulatedAnnealing`,
+`inertia_weight`/`cognitive_weight`/`social_weight` for `ParticleSwarm`, and so on).
+`tune_components.py` only applies to `GEA` (the repair/selector machinery it tunes
+doesn't exist on every algorithm).
+
 Both run an Optuna TPE search against a fixed baseline and write the best candidate
-back into `scripts/conf/gea.yaml` / `scripts/conf/components/common.yaml`.
+back into that algorithm's own config (`scripts/conf/<algo>.yaml`) /
+`scripts/conf/components/common.yaml`, respectively.
+
+### Slurm batch scripts
+
+`run_full.sbatch` and `run_tune_algorithm.sbatch` loop over every algorithm in turn
+(running `scripts/run.py` / `scripts/tune_algorithm.py` once per config);
+`run_tune_components.sbatch` runs `scripts/tune_components.py` once, against `GEA`.
