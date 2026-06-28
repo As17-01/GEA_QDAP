@@ -1,5 +1,5 @@
 # Run-loop settings shared by every algorithm config (standard.yaml, adaptive.yaml).
-runs: 5
+runs: 30
 time_limit: 1000
 # Mirrors run_test.sbatch's NUM_WORKERS env var (set there alongside pinning
 # OMP/MKL/OPENBLAS/NUMEXPR to 1 thread each, so this multiprocessing pool is the only
