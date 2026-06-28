@@ -35,12 +35,14 @@ Core dependencies: `numpy`, `scipy`, `numba`, `pandas`, `openpyxl`, `matplotlib`
 ```
 src/
 ├── algos/
-│   ├── ga_core.py        # BaseGA: shared init, selection, repair, local search, run loop
+│   ├── base.py            # BaseGA: shared init, selection, repair, local search, run loop
 │   ├── ga_standard.py     # StandardGA: fixed crossover/mutation rates
 │   ├── ga_adaptive.py     # AdaptiveGA: lambda-scaled, performance-adaptive rates
-│   ├── ga_logging.py      # Iteration/timing/operator-stat reporting
-│   ├── costs.py           # cost_function_perm, evaluate_permutation, diversity metric
-│   └── utils.py           # seed_all, clone_individual, the `timed` profiling decorator
+│   ├── ga_sa.py           # SimulatedAnnealing: population of independent annealing chains
+│   ├── ga_pso.py          # ParticleSwarm: discrete PSO via crossover/mutation moves
+│   ├── ga_hybrid_gapso.py # HybridGAPSO: rank-split PSO refinement + GA regeneration
+│   ├── ga_hybrid_gasa.py  # HybridGASA: GA offspring filtered by an SA acceptance rule
+│   └── logger.py          # Iteration/timing/operator-stat reporting
 ├── operators/
 │   ├── crossover.py       # One-point / two-point crossover
 │   ├── mutations.py       # Swap, reversion, insertion, big-swap, random-reassignment

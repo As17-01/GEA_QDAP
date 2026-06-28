@@ -1,0 +1,20 @@
+defaults:
+  - datasets: common
+  - components@ga: common
+  - run: common
+  - hydra: common
+  - _self_
+
+ga:
+  _target_: src.algos.ga_hybrid_gapso.HybridGAPSO
+  population_size: 350
+  iterations: 1000
+  pso_fraction: 0.5
+  inertia_weight: 0.4
+  cognitive_weight: 0.3
+  social_weight: 0.3
+  crossover_rate: 0.7
+  mutation_rate: 0.3
+  stagnation_limit: 30
+  immigrant_rate: 0.1
+  verbose: false

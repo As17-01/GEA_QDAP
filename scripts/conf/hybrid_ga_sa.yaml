@@ -1,0 +1,19 @@
+defaults:
+  - datasets: common
+  - components@ga: common
+  - run: common
+  - hydra: common
+  - _self_
+
+ga:
+  _target_: src.algos.ga_hybrid_gasa.HybridGASA
+  population_size: 350
+  iterations: 1000
+  crossover_rate: 0.7
+  mutation_rate: 0.3
+  initial_temperature: 50.0
+  cooling_rate: 0.97
+  min_temperature: 1e-3
+  stagnation_limit: 30
+  immigrant_rate: 0.1
+  verbose: false

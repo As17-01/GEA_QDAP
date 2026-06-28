@@ -1,6 +1,6 @@
 import math
 
-from src.algos.ga_core import BaseGA
+from src.algos.base import BaseGA
 
 
 class AdaptiveGA(BaseGA):
