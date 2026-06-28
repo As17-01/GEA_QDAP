@@ -3,11 +3,11 @@
 repair_class:
   _target_: src.repair.RFRepair
   tol: 1e-9
-  subsample_size: 0.5
+  subsample_size: 0.6470290648202681
 
 selector:
   _target_: src.selection.DiversitySelector
-  beta: 10.0
-  diversity_weight_start: 0.7
-  diversity_weight_end: 0.2
-  elite_fraction: 0.2
+  beta: 18.414511817358562
+  diversity_weight_start: 0.6588363576696207
+  diversity_weight_end: 0.16752652975268725
+  elite_fraction: 0.4625732352513558
