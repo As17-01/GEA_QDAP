@@ -51,8 +51,8 @@ src/
 
 datasets/        # Full benchmark instances (e.g. c201535, T1-T14)
 debug_datasets/  # Smaller instances used by the test harness
-tests/test_20260402/
-└── full_run.py  # Sequential standard-vs-adaptive benchmark runner
+scripts/
+└── run.py  # Sequential standard-vs-adaptive benchmark runner
 ```
 
 ## Usage
@@ -86,7 +86,7 @@ print(f"Assignment (facility per job): {best.permutation.tolist()}")
 ### Comparison test runner
 
 ```bash
-python3 tests/test_20260402/full_run.py
+python3 scripts/run.py
 ```
 
 Runs the configured algorithm(s) across every dataset under `debug_datasets/` and
