@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Tunes scripts/conf/components/common.yaml's repair/selection knobs (algorithm
 parameters -- population_size, iterations, crossover_rate, mutation_rate, etc. -- are left
-as configured in conf/tune.yaml's `ga` block, inherited from standard.yaml; see
-tune_algorithm.py for tuning those instead). Only StandardGA is used as the evaluation
+as configured in conf/tune.yaml's `ga` block, inherited from gea.yaml; see
+tune_algorithm.py for tuning those instead). Only GEA is used as the evaluation
 algorithm.
 
 Search is delegated to Optuna's TPE sampler instead of blind random sampling: each trial's
@@ -34,8 +34,8 @@ def main(cfg: DictConfig) -> None:
 
     base_ga_cfg = OmegaConf.to_container(cfg.ga, resolve=True)
     algo_class = base_ga_cfg["_target_"].rsplit(".", 1)[-1]
-    if algo_class != "StandardGA":
-        raise SystemExit(f"tune_components.py only tunes StandardGA, got {algo_class} -- run with ga=standard's defaults intact")
+    if algo_class != "GEA":
+        raise SystemExit(f"tune_components.py only tunes GEA, got {algo_class} -- run with ga=gea's defaults intact")
 
     algorithm_params = {
         k: base_ga_cfg[k] for k in ("population_size", "iterations", "crossover_rate", "mutation_rate")
@@ -49,7 +49,7 @@ def main(cfg: DictConfig) -> None:
     print(f"[{timestamp()}] Algorithm params (fixed): {algorithm_params}")
     print(f"[{timestamp()}] Baseline: {baseline_components}")
 
-    baseline_per_dataset = evaluate(baseline_components, base_ga_cfg, "Standard", datasets, runs, time_limit, workers)
+    baseline_per_dataset = evaluate(baseline_components, base_ga_cfg, "GEA", datasets, runs, time_limit, workers)
     candidate_records = [{"components": baseline_components, "per_dataset": baseline_per_dataset, "overall_score": 1.0}]
 
     print(f"[{timestamp()}] Tuning components with Optuna TPE: {cfg.tune.n_candidates - 1} trials x {len(datasets)} datasets x {runs} runs")
@@ -58,7 +58,7 @@ def main(cfg: DictConfig) -> None:
         components = {key: suggest_param(trial, key, low, high) for key, (low, high) in param_space.items()}
         print(f"\n[{timestamp()}] Trial {trial.number + 1}/{cfg.tune.n_candidates - 1}: {components}")
 
-        per_dataset = evaluate(components, base_ga_cfg, "Standard", datasets, runs, time_limit, workers)
+        per_dataset = evaluate(components, base_ga_cfg, "GEA", datasets, runs, time_limit, workers)
         score = relative_score(per_dataset, baseline_per_dataset, datasets, runs)
         candidate_records.append({"components": components, "per_dataset": per_dataset, "overall_score": score})
         return score
@@ -79,7 +79,7 @@ def main(cfg: DictConfig) -> None:
 
     artifact = {
         "timestamp": timestamp(),
-        "algorithm": "Standard",
+        "algorithm": "GEA",
         "algorithm_params": algorithm_params,
         "datasets": datasets,
         "runs_per_dataset": runs,

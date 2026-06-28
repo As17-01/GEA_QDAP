@@ -1,4 +1,4 @@
-# Dataset list shared by every algorithm config (conf/standard.yaml, conf/adaptive.yaml).
+# Dataset list shared by every algorithm config (conf/gea.yaml, conf/adaptive.yaml).
 #
 # By default only the small "debug" datasets are uncommented, so a default run stays
 # fast. Uncomment more (or all) of the lines below to run the full benchmark suite.

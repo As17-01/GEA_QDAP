@@ -1,14 +1,16 @@
 defaults:
   - datasets: common
+  - components@ga: common
   - run: common
   - hydra: common
   - _self_
 
 ga:
-  _target_: src.algos.ga_standard.StandardGA
+  _target_: src.algos.ga_gea.GEA
   population_size: 350
   iterations: 1000
   crossover_rate: 0.7
-  mutation_rate: 0.01
-  elitism_count: 1
+  mutation_rate: 0.3
+  stagnation_limit: 30
+  immigrant_rate: 0.1
   verbose: false

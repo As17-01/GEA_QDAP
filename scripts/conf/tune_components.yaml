@@ -1,5 +1,5 @@
 defaults:
-  - standard
+  - gea
   - _self_
 
 tune:

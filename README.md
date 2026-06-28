@@ -1,22 +1,28 @@
 # GEA-QDAP — Genetic Algorithm for the Generalized Quadratic Assignment Problem
 
-A Python implementation of two genetic algorithm variants — a classic/standard GA and a
-self-adaptive GA — for solving the Generalized Quadratic Assignment Problem (GQAP). See
+A Python implementation of several genetic algorithm variants — a textbook standard GA,
+this project's own enhanced GA (GEA), and a self-adaptive GA built on it — for solving
+the Generalized Quadratic Assignment Problem (GQAP). See
 [PROBLEM_DESCRIPTION.md](PROBLEM_DESCRIPTION.md) for the mathematical formulation.
 
 ## Features
 
-- **Two GA variants**: `StandardGA` (fixed crossover/mutation rates) and `AdaptiveGA`
-  (rates are scaled each generation by lambda multipliers that adapt to how much
-  improvement each operator actually produced)
-- **Diversity-aware selection**: parents are chosen via a diversity-weighted roulette
-  wheel; survivors are kept via an elite + diversity/cost hybrid score that decays
-  toward pure cost-based selection over the run
-- **Memetic local search**: top elite individuals get a hill-climbing polish pass each
-  generation (auto-disabled on large instances where it isn't worth the cost)
+- **Three GA variants**: `StandardGA` (the textbook Holland (1992) simple GA, used as
+  the baseline), `GEA` (this project's own enhanced GA -- diversity-aware selection,
+  randomized capacity repair, stagnation immigrants, memetic local search, all on top
+  of fixed crossover/mutation rates), and `AdaptiveGA` (GEA's enhancements, but rates
+  are scaled each generation by lambda multipliers that adapt to how much improvement
+  each operator actually produced)
+- **Diversity-aware selection** (GEA/AdaptiveGA only): parents are chosen via a
+  diversity-weighted roulette wheel; survivors are kept via an elite + diversity/cost
+  hybrid score that decays toward pure cost-based selection over the run
+- **Memetic local search** (GEA/AdaptiveGA only): top elite individuals get a
+  hill-climbing polish pass each generation (auto-disabled on large instances where it
+  isn't worth the cost)
 - **Capacity repair**: infeasible offspring/mutations are repaired by reassigning
-  overloaded jobs to facilities with spare capacity, either greedily or with
-  randomized sampling for diversity
+  overloaded jobs to facilities with spare capacity, either greedily (`StandardGA`'s
+  default) or with randomized sampling for diversity (`RFRepair`, GEA/AdaptiveGA's
+  default)
 - **Reproducible runs**: a single `seed_all()` call seeds both NumPy's RNG and the
   separate RNG used inside the `numba`-jitted operators
 
@@ -36,8 +42,9 @@ Core dependencies: `numpy`, `scipy`, `numba`, `pandas`, `openpyxl`, `matplotlib`
 src/
 ├── algos/
 │   ├── base.py            # BaseGA: shared init, selection, repair, local search, run loop
-│   ├── ga_standard.py     # StandardGA: fixed crossover/mutation rates
-│   ├── ga_adaptive.py     # AdaptiveGA: lambda-scaled, performance-adaptive rates
+│   ├── ga_standard.py     # StandardGA: textbook Holland (1992) baseline
+│   ├── ga_gea.py          # GEA: diversity selection, repair, immigrants, local search
+│   ├── ga_adaptive.py     # AdaptiveGA: GEA + lambda-scaled, performance-adaptive rates
 │   ├── ga_sa.py           # SimulatedAnnealing: population of independent annealing chains
 │   ├── ga_pso.py          # ParticleSwarm: discrete PSO via crossover/mutation moves
 │   ├── ga_hybrid_gapso.py # HybridGAPSO: rank-split PSO refinement + GA regeneration
@@ -61,15 +68,15 @@ scripts/
 
 ```python
 from src.data.model_loader import load_model
-from src.algos.ga_standard import StandardGA
+from src.algos.ga_gea import GEA
 from src.algos.ga_adaptive import AdaptiveGA
-from src.algos.utils import seed_all
+from src.seeding import seed_all
 
-model = load_model("c201535")  # looked up under debug_datasets/<name>.m
+model = load_model("c201535")
 
 seed_all(42)  # reproducible across NumPy and numba-jitted operators
 
-ga = StandardGA(
+ga = GEA(
     model,
     population_size=350,
     iterations=1000,
@@ -84,6 +91,10 @@ print(f"Assignment (facility per job): {best.permutation.tolist()}")
 
 `AdaptiveGA` takes the same constructor arguments plus `alpha`, `lambda_min`,
 `lambda_max`, and `epsilon` to control how aggressively operator rates adapt.
+
+`StandardGA` (the textbook Holland baseline) is constructed the same way, but has no
+`selector` and uses a much smaller per-gene `mutation_rate` (default `0.01`) plus
+`elitism_count` instead.
 
 ### Comparison test runner
 
@@ -107,7 +118,7 @@ writes per-dataset cost statistics (mean/median/min/max/std) to `results.json`.
 An operator that is currently producing improvements gets used more; one that isn't
 gets throttled back — without any manual per-instance rate tuning.
 
-## Selection and repair
+## Selection and repair (GEA / AdaptiveGA)
 
 - **Parent selection**: roulette wheel weighted by a softmax over each individual's
   Hamming-distance diversity relative to the population.
