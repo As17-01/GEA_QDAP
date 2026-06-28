@@ -1,0 +1,152 @@
+import math
+
+import numpy as np
+from numba import njit
+
+from src.algos.base import BaseGA
+from src.costs import evaluate_permutation_delta_batch
+from src.data.models import Individual, Model
+
+
+@njit(fastmath=True, cache=True)
+def _crossover_robust_chromosome_nb(p1, p2, cvar1, cvar2):
+    n = len(p1)
+    child1 = np.empty(n, dtype=p1.dtype)
+    child2 = np.empty(n, dtype=p1.dtype)
+    n_match_p1 = 0
+
+    for j in range(n):
+        # Higher remaining capacity slack at the gene's assigned facility means that gene
+        # tolerates more future capacity pressure before becoming infeasible -- the more
+        # "robust" choice for this position, independent of its assignment cost.
+        if cvar1[p1[j]] >= cvar2[p2[j]]:
+            child1[j] = p1[j]
+            child2[j] = p2[j]
+            n_match_p1 += 1
+        else:
+            child1[j] = p2[j]
+            child2[j] = p1[j]
+
+    return child1, child2, n_match_p1
+
+
+def crossover_robust_chromosome(p1: Individual, p2: Individual, model: Model):
+    n = len(p1.permutation)
+    child1, child2, n_match_p1 = _crossover_robust_chromosome_nb(p1.permutation, p2.permutation, p1.cvar, p2.cvar)
+
+    # Pair each child with whichever parent it shares the most positions with -- the
+    # tightest baseline for delta-cost evaluation, same convention as
+    # src/operators/crossover.py's _pair_by_match_count.
+    if n_match_p1 >= n - n_match_p1:
+        return (child1, p1), (child2, p2)
+    return (child1, p2), (child2, p1)
+
+
+class GEAScenario1(BaseGA):
+    """Modernization of GEA -- Scenario 1: Crossover with Robust Chromosome (RC).
+
+    Each generation, RC crossover (favoring, per gene, whichever parent's assigned
+    facility has more remaining capacity slack -- the more capacity-robust choice)
+    replaces GEA's usual randomly-chosen crossover operator. Its rate is scaled by an
+    adaptive lambda_rc multiplier exactly as AdaptiveGA scales lambda_crossover (see
+    ga_adaptive.py):
+
+    (a) Apply RC crossover to obtain offspring and evaluate them.
+    (b) Compute delta_rc between offspring and their parent baselines.
+    (c) Update lambda_rc with Eq. 2 (lambda_new = lambda_old + alpha * delta_rc).
+    (d) Clip lambda_rc to [lambda_min, lambda_max] (Eq. 3).
+
+    Mutation stays GEA's regular, non-adaptive mixed mutation operator.
+    """
+
+    def __init__(
+        self,
+        model,
+        population_size=350,
+        iterations=1000,
+        crossover_rate=0.7,
+        mutation_rate=0.3,
+        alpha=0.01,
+        lambda_min=0.4,
+        lambda_max=1.5,
+        epsilon=1e-5,
+        repair_class=None,
+        selector=None,
+        stagnation_limit=30,
+        immigrant_rate=0.1,
+        verbose=False,
+    ):
+        super().__init__(
+            model,
+            population_size,
+            iterations,
+            repair_class=repair_class,
+            selector=selector,
+            stagnation_limit=stagnation_limit,
+            immigrant_rate=immigrant_rate,
+            verbose=verbose,
+        )
+
+        self.base_crossover = crossover_rate
+        self.mutation_rate = mutation_rate
+
+        self.lambda_rc = 1.0
+        self.alpha = alpha
+        self.lambda_min = lambda_min
+        self.lambda_max = lambda_max
+        self.epsilon = epsilon
+
+    def _update_lambda(self, lam, delta):
+        new_val = lam + self.alpha * delta
+        return max(self.lambda_min, min(self.lambda_max, new_val))
+
+    def _robust_chromosome_crossover(self, probabilities, n):
+        offspring = []
+        delta = 0.0
+        valid = 0
+        new_best = 0
+
+        with self.logger.timed("crossover"):
+            num_pairs = len(range(0, n, 2))
+            if num_pairs:
+                parent_indices = self.selector.roulette_wheel_selection_batch(probabilities, 2 * num_pairs)
+
+                raw_perms = []
+                baselines = []
+                for k in range(num_pairs):
+                    i1, i2 = parent_indices[2 * k], parent_indices[2 * k + 1]
+                    p1, p2 = self.population[i1], self.population[i2]
+
+                    (child1, base1), (child2, base2) = crossover_robust_chromosome(p1, p2, self.model)
+                    raw_perms.extend((child1, child2))
+                    baselines.extend((base1, base2))
+
+                repaired = self.repair_batch_wrapper(np.array(raw_perms))
+                offspring = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+
+                for child, baseline in zip(offspring, baselines):
+                    parent_cost = baseline.cost
+                    if math.isfinite(parent_cost) and math.isfinite(child.cost):
+                        delta += (parent_cost - child.cost) / (parent_cost + self.epsilon)
+                    if math.isfinite(child.cost):
+                        valid += 1
+                        if child.cost < self.best_solution.cost:
+                            new_best += 1
+
+        self.logger.record_crossover(n, valid, new_best)
+        return offspring, delta
+
+    def step(self) -> None:
+        probs = self.compute_selection_probabilities()
+
+        n_rc = int(self.base_crossover * self.population_size * self.lambda_rc)
+        nmutation = int(math.floor(self.mutation_rate * self.population_size))
+
+        offspring, delta_rc = self._robust_chromosome_crossover(probs, n_rc)
+        mutations = [child for child, _ in self.mutate(nmutation)]
+        immigrants = self.maybe_generate_immigrants()
+
+        self.lambda_rc = self._update_lambda(self.lambda_rc, delta_rc)
+
+        pool = self.population + offspring + mutations + immigrants
+        self.select_from_pool(pool)
