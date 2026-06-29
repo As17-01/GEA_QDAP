@@ -6,7 +6,7 @@ defaults:
   - _self_
 
 ga:
-  _target_: src.algos.gea_scenario_1.GEAScenario1
+  _target_: src.algos.ga_gea_scenario_1.GEAScenario1
   population_size: 350
   iterations: 1000
   crossover_rate: 0.7

@@ -6,7 +6,7 @@ defaults:
   - _self_
 
 ga:
-  _target_: src.algos.ga_adaptive.AdaptiveGA
+  _target_: src.algos.ga_adaptive.AdaptiveGEA
   population_size: 350
   iterations: 1000
   crossover_rate: 0.7

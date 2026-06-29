@@ -125,8 +125,10 @@ against.
 
 ## 2. `GEA` (`src/algos/ga_gea.py`)
 
-This project's own enhanced GA — `BaseGA`'s full machinery with fixed crossover and
-mutation rates:
+This project's own enhanced GA. Where `StandardGA` above deliberately bypasses most of
+the "Shared framework" section (it implements its own selection and replacement instead
+of calling into it), `GEA` is the opposite case: it doesn't override or opt out of
+anything described there. Concretely, with fixed crossover and mutation rates:
 
 - **Selection**: `DiversitySelector` (diversity-weighted roulette parents, elite +
   diversity/cost hybrid survivors — see "Shared framework" above).
@@ -139,7 +141,7 @@ mutation rates:
   individuals are injected to give crossover new material to recombine with.
 - **Memetic local search**: enabled (see "Shared framework").
 
-## 3. `AdaptiveGA` (`src/algos/ga_adaptive.py`)
+## 3. `AdaptiveGEA` (`src/algos/ga_adaptive.py`)
 
 The self-adaptive variant proposed for this project: identical to `GEA`, except the
 crossover and mutation rates are no longer fixed — each is scaled by its own lambda
@@ -223,14 +225,14 @@ baseline is always accepted, a worse one only gets a chance proportional to
 quality-losing moves (escaping local optima) while late generations behave like a plain
 elitist GA.
 
-## 8. `GEAScenario1` — Crossover with Robust Chromosome (`src/algos/gea_scenario_1.py`)
+## 8. `GEAScenario1` — Crossover with Robust Chromosome (`src/algos/ga_gea_scenario_1.py`)
 
 Modernization of `GEA`: replaces its randomly-dispatched crossover with a new operator,
 **RC (Robust Chromosome) crossover** — per gene, the child inherits from whichever
 parent's assigned facility has *more remaining capacity slack* (`cvar`), i.e. the more
 capacity-robust gene, independent of its assignment cost. This operator's rate is
 scaled by its own adaptive `lambda_rc` multiplier, using the exact same update/clip
-rule `AdaptiveGA` uses for `lambda_crossover`:
+rule `AdaptiveGEA` uses for `lambda_crossover`:
 
 (a) apply RC crossover, evaluate offspring;
 (b) compute `delta_rc` against each offspring's parent baseline;
@@ -239,7 +241,7 @@ rule `AdaptiveGA` uses for `lambda_crossover`:
 
 Mutation stays GEA's regular, non-adaptive mixed mutation operator.
 
-## 9. `GEAScenario2` — Directed Mutation (`src/algos/gea_scenario_2.py`)
+## 9. `GEAScenario2` — Directed Mutation (`src/algos/ga_gea_scenario_2.py`)
 
 Modernization of `GEA`: replaces its randomly-dispatched mutation with
 **DM (Directed Mutation)** — reuses `mutation_greedy_reassign` (move the single
@@ -248,7 +250,7 @@ move rather than a blind random one. Its rate is scaled by an adaptive `lambda_d
 multiplier, updated and clipped the same way as `lambda_rc` above. Crossover stays
 GEA's regular, non-adaptive mixed crossover operator.
 
-## 10. `GEAScenario3` — Gene Injection (`src/algos/gea_scenario_3.py`)
+## 10. `GEAScenario3` — Gene Injection (`src/algos/ga_gea_scenario_3.py`)
 
 Modernization of `GEA`: adds a **third** operator, **GI (Gene Injection)**, alongside
 GEA's regular fixed-rate crossover and mutation. GI reuses `mutation_random` (replace a

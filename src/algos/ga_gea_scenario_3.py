@@ -15,7 +15,7 @@ class GEAScenario3(BaseGA):
     genetic material rather than perturbing the existing assignment) runs as a third
     operator alongside GEA's regular crossover and mutation, both of which stay at
     fixed, non-adaptive rates. GI's own rate is scaled by an adaptive lambda_gi
-    multiplier exactly as AdaptiveGA scales its lambdas (see ga_adaptive.py):
+    multiplier exactly as AdaptiveGEA scales its lambdas (see ga_adaptive.py):
 
     (a) Apply GI to obtain offspring and evaluate them.
     (b) Compute delta_gi between offspring and their parent baselines.

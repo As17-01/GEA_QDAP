@@ -14,7 +14,7 @@ class GEAScenario2(BaseGA):
     single worst-assigned job to its cheapest feasible facility -- a directed,
     fitness-improving move rather than GEA's usual blind random mutation) replaces
     GEA's regular mutation operator. Its rate is scaled by an adaptive lambda_dm
-    multiplier exactly as AdaptiveGA scales lambda_mutation (see ga_adaptive.py):
+    multiplier exactly as AdaptiveGEA scales lambda_mutation (see ga_adaptive.py):
 
     (a) Apply DM to obtain offspring and evaluate them.
     (b) Compute delta_dm between offspring and their parent baselines.

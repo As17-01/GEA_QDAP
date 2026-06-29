@@ -48,7 +48,7 @@ class GEAScenario1(BaseGA):
     Each generation, RC crossover (favoring, per gene, whichever parent's assigned
     facility has more remaining capacity slack -- the more capacity-robust choice)
     replaces GEA's usual randomly-chosen crossover operator. Its rate is scaled by an
-    adaptive lambda_rc multiplier exactly as AdaptiveGA scales lambda_crossover (see
+    adaptive lambda_rc multiplier exactly as AdaptiveGEA scales lambda_crossover (see
     ga_adaptive.py):
 
     (a) Apply RC crossover to obtain offspring and evaluate them.
