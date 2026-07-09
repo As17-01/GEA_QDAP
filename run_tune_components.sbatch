@@ -2,6 +2,7 @@
 #SBATCH --job-name=gea_gqap_tune_comp
 #SBATCH --error=gea_gqap_tune_comp-%j.err
 #SBATCH --output=gea_gqap_tune_comp-%j.log
+#SBATCH --partition=rocky
 #SBATCH --time=336:00:00
 #SBATCH --cpus-per-task=16
 #SBATCH --nodes=1
