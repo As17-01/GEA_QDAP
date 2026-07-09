@@ -10,17 +10,15 @@ from src.operators.mutations import mutation_random
 class GEAScenario3(BaseGA):
     """Modernization of GEA -- Scenario 3: Gene Injection (GI).
 
-    Each generation, GI (mutation_random: replace a handful of random genes in each
-    selected individual with brand-new random facility assignments, injecting fresh
-    genetic material rather than perturbing the existing assignment) runs as a third
-    operator alongside GEA's regular crossover and mutation, both of which stay at
-    fixed, non-adaptive rates. GI's own rate is scaled by an adaptive lambda_gi
-    multiplier exactly as AdaptiveGEA scales its lambdas (see ga_adaptive.py):
+    Runs three operators each generation at fixed rates (no adaptive lambda):
+    - Regular crossover (randomly chosen from the 4 standard operators) at crossover_rate.
+    - Regular mutation (randomly chosen from the 9 standard operators) at mutation_rate.
+    - GI (mutation_random): replaces a handful of random genes in each selected individual
+      with brand-new random facility assignments, injecting fresh genetic material rather
+      than perturbing the existing assignment. Applied at injection_rate.
 
-    (a) Apply GI to obtain offspring and evaluate them.
-    (b) Compute delta_gi between offspring and their parent baselines.
-    (c) Update lambda_gi with Eq. 2 (lambda_new = lambda_old + alpha * delta_gi).
-    (d) Clip lambda_gi to [lambda_min, lambda_max] (Eq. 3).
+    All three sets of offspring are pooled together with the current population and the
+    DiversitySelector picks the next generation.
     """
 
     def __init__(
@@ -31,10 +29,6 @@ class GEAScenario3(BaseGA):
         crossover_rate=0.7,
         mutation_rate=0.3,
         injection_rate=0.1,
-        alpha=0.01,
-        lambda_min=0.4,
-        lambda_max=1.5,
-        epsilon=1e-5,
         repair_class=None,
         selector=None,
         stagnation_limit=30,
@@ -54,21 +48,12 @@ class GEAScenario3(BaseGA):
 
         self.crossover_rate = crossover_rate
         self.mutation_rate = mutation_rate
-        self.base_injection = injection_rate
-
-        self.lambda_gi = 1.0
-        self.alpha = alpha
-        self.lambda_min = lambda_min
-        self.lambda_max = lambda_max
-        self.epsilon = epsilon
-
-    def _update_lambda(self, lam, delta):
-        new_val = lam + self.alpha * delta
-        return max(self.lambda_min, min(self.lambda_max, new_val))
+        self.injection_rate = injection_rate
 
     def _gene_injection(self, n):
         injected = []
-        delta = 0.0
+        valid = 0
+        new_best = 0
 
         with self.logger.timed("gene_injection"):
             if n > 0:
@@ -79,26 +64,26 @@ class GEAScenario3(BaseGA):
                 repaired = self.repair_batch_wrapper(raw_perms)
                 injected = evaluate_permutation_delta_batch(baselines, repaired, self.model)
 
-                for child, baseline in zip(injected, baselines):
-                    parent_cost = baseline.cost
-                    if math.isfinite(parent_cost) and math.isfinite(child.cost):
-                        delta += (parent_cost - child.cost) / (parent_cost + self.epsilon)
+                for child in injected:
+                    if math.isfinite(child.cost):
+                        valid += 1
+                        if child.cost < self.best_solution.cost:
+                            new_best += 1
 
-        return injected, delta
+        self.logger.record_mutation(n, valid, new_best)
+        return injected
 
     def step(self) -> None:
         probs = self.compute_selection_probabilities()
 
         ncrossover = int(2 * round((self.crossover_rate * self.population_size) / 2))
         nmutation = int(math.floor(self.mutation_rate * self.population_size))
-        n_gi = int(self.base_injection * self.population_size * self.lambda_gi)
+        n_gi = int(math.floor(self.injection_rate * self.population_size))
 
         offspring = [child for child, _ in self.crossover(probs, ncrossover)]
         mutations = [child for child, _ in self.mutate(nmutation)]
-        injected, delta_gi = self._gene_injection(n_gi)
+        injected = self._gene_injection(n_gi)
         immigrants = self.maybe_generate_immigrants()
-
-        self.lambda_gi = self._update_lambda(self.lambda_gi, delta_gi)
 
         pool = self.population + offspring + mutations + injected + immigrants
         self.select_from_pool(pool)

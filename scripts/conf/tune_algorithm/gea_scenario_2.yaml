@@ -12,8 +12,6 @@ tune:
   param_space:
     crossover_rate: [0.4, 0.9]
     mutation_rate: [0.1, 0.6]
-    alpha: [0.001, 0.05]
-    lambda_min: [0.2, 0.6]
-    lambda_max: [1.2, 2.0]
+    dm_rate: [0.1, 0.6]
     stagnation_limit: [10, 60]
     immigrant_rate: [0.02, 0.3]
