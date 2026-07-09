@@ -234,6 +234,11 @@ class BaseGA(ABC):
         self.logger.start_run()
         self.initialize_population()
 
+        # Wall-clock time (seconds since run start) at which the best cost was last
+        # improved. Set after initialization so there's always a valid value, then
+        # updated whenever a new best is found during the main loop.
+        self.hitting_time: float = self.logger.elapsed()
+
         if self.verbose:
             print(f"GA started → Population: {self.population_size:,} | Iterations: {self.iterations}\n")
 
@@ -248,8 +253,12 @@ class BaseGA(ABC):
             self.logger.record_iteration(iter_time)
 
             self.population.sort(key=lambda x: x.cost)
+            prev_best = self.best_solution.cost if self.best_solution is not None else float("inf")
             self.best_solution = self.population[0]
             self.worst_cost = max(self.worst_cost, self.population[-1].cost)
+
+            if self.best_solution.cost < prev_best - 1e-9:
+                self.hitting_time = self.logger.elapsed()
 
             if it % 50 == 0:
                 if self.verbose:

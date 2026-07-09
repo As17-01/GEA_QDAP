@@ -64,11 +64,12 @@ def run_single_experiment(
         model = load_model(dataset_name)
         ga = hydra.utils.instantiate(ga_cfg, model=model)
         best = ga.run(time_limit=time_limit)
+        hitting_time = getattr(ga, "hitting_time", None)
 
-        return (dataset_name, run_num, best.cost, time.perf_counter() - start, None)
+        return (dataset_name, run_num, best.cost, time.perf_counter() - start, hitting_time, None)
 
     except Exception as e:
-        return (dataset_name, run_num, None, time.perf_counter() - start, str(e))
+        return (dataset_name, run_num, None, time.perf_counter() - start, None, str(e))
 
 
 def run_all_experiments(
@@ -87,6 +88,7 @@ def run_all_experiments(
     tasks = [(ds, r) for ds in datasets for r in range(1, runs + 1)]
     results_by_dataset: Dict[str, List[float]] = {ds: [] for ds in datasets}
     runtimes_by_dataset: Dict[str, List[float]] = {ds: [] for ds in datasets}
+    hitting_times_by_dataset: Dict[str, List[float]] = {ds: [] for ds in datasets}
     errors_by_dataset: Dict[str, int] = {ds: 0 for ds in datasets}
     completed_by_dataset: Dict[str, int] = {ds: 0 for ds in datasets}
 
@@ -99,13 +101,15 @@ def run_all_experiments(
 
         for future in as_completed(futures):
             ds, _ = futures[future]
-            _, _, cost, runtime, err = future.result()
+            _, _, cost, runtime, hitting_time, err = future.result()
 
             runtimes_by_dataset[ds].append(runtime)
             if err:
                 errors_by_dataset[ds] += 1
             else:
                 results_by_dataset[ds].append(cost)
+                if hitting_time is not None:
+                    hitting_times_by_dataset[ds].append(hitting_time)
             completed_by_dataset[ds] += 1
 
             # Print one aggregated line per dataset, once all its runs are in, instead of
@@ -114,10 +118,12 @@ def run_all_experiments(
             if completed_by_dataset[ds] == runs:
                 stats = calculate_statistics(results_by_dataset[ds])
                 total_runtime = sum(runtimes_by_dataset[ds])
+                avg_hit = statistics.mean(hitting_times_by_dataset[ds]) if hitting_times_by_dataset[ds] else None
+                hit_note = f" ; avg hitting time = {avg_hit:.1f}s" if avg_hit is not None else ""
                 error_note = f" ({errors_by_dataset[ds]} errors)" if errors_by_dataset[ds] else ""
                 print(
                     f"   {ds} run → avg cost = {stats['mean']:.2f} ; std = {stats['std']:.2f} ; "
-                    f"total runtime = {total_runtime:.2f}s{error_note}"
+                    f"total runtime = {total_runtime:.2f}s{hit_note}{error_note}"
                 )
 
     return [
@@ -125,6 +131,14 @@ def run_all_experiments(
             "dataset": ds,
             "results": {algo_label: calculate_statistics(results_by_dataset[ds])},
             "runtime": {algo_label: {**calculate_statistics(runtimes_by_dataset[ds]), "total": sum(runtimes_by_dataset[ds])}},
+            "hitting_time": {
+                algo_label: {
+                    "mean": float(statistics.mean(hitting_times_by_dataset[ds])) if hitting_times_by_dataset[ds] else None,
+                    "min": float(min(hitting_times_by_dataset[ds])) if hitting_times_by_dataset[ds] else None,
+                    "max": float(max(hitting_times_by_dataset[ds])) if hitting_times_by_dataset[ds] else None,
+                    "std": float(statistics.stdev(hitting_times_by_dataset[ds])) if len(hitting_times_by_dataset[ds]) > 1 else 0.0,
+                }
+            },
             "errors": errors_by_dataset[ds],
         }
         for ds in datasets
