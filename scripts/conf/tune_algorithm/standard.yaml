@@ -4,7 +4,7 @@ defaults:
   - _self_
 
 tune:
-  runs: 5
+  runs: 30
   n_candidates: 30
   seed: 0
   ga_path: conf/standard.yaml
