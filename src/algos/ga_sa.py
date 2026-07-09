@@ -5,71 +5,65 @@ import numpy as np
 from src.algos.base import BaseGA
 from src.costs import evaluate_permutation_delta_batch
 from src.operators.mutations import choose_mutation
+from src.repair import GreedyRepair
 
 
 class SimulatedAnnealing(BaseGA):
-    """Bertsimas & Tsitsiklis (1993). Classic SA anneals a single solution; here the
-    population is a bank of independent annealing chains (one walker per population slot)
-    sharing a single global temperature schedule, so it reuses BaseGA's batched repair/eval
-    machinery and run loop instead of looping one permutation at a time in pure Python.
+    """Bertsimas & Tsitsiklis (1993). Classic single-solution SA: starts from one
+    initial solution and anneals it via repeated Metropolis acceptance tests.
 
-    Each walker proposes one neighbor per iteration via the existing mutation operators and
-    accepts it outright if it's better, or with Metropolis probability exp(-delta/T) if it's
-    worse. No crossover, no selection pressure between walkers -- each chain only ever
-    competes against its own previous state.
+    Each iteration, one neighbor is proposed via a randomly-chosen mutation operator
+    and:
+    - accepted outright if it's better (cost <= current), or
+    - accepted with Metropolis probability exp(-delta/T) if it's worse.
+
+    Temperature is cooled geometrically after each step:
+        T <- max(T_min, T * cooling_rate)
     """
 
     def __init__(
         self,
         model,
-        population_size=350,
+        population_size=1,
         iterations=1000,
         initial_temperature=50.0,
         cooling_rate=0.97,
         min_temperature=1e-3,
         repair_class=None,
-        selector=None,
-        stagnation_limit=30,
-        immigrant_rate=0.1,
         verbose=False,
     ):
+        # Single-solution SA: population size is always 1 regardless of config.
         super().__init__(
             model,
-            population_size,
+            1,
             iterations,
-            repair_class=repair_class,
-            selector=selector,
-            stagnation_limit=stagnation_limit,
-            immigrant_rate=immigrant_rate,
+            repair_class=repair_class if repair_class is not None else GreedyRepair(),
             verbose=verbose,
         )
-
         self.initial_temperature = initial_temperature
         self.cooling_rate = cooling_rate
         self.min_temperature = min_temperature
         self.temperature = initial_temperature
 
+    def polish_elites(self) -> None:
+        pass
+
+    def maybe_generate_immigrants(self):
+        return []
+
     def step(self) -> None:
-        perms = np.array([choose_mutation(ind.permutation, self.model) for ind in self.population])
-        repaired = self.repair_batch_wrapper(perms)
-        candidates = evaluate_permutation_delta_batch(self.population, repaired, self.model)
+        current = self.population[0]
 
-        for i, (current, candidate) in enumerate(zip(self.population, candidates)):
-            if candidate.cost <= current.cost:
-                self.population[i] = candidate
-                continue
+        candidate_perm = choose_mutation(current.permutation, self.model)
+        repaired = self.repair_batch_wrapper(np.array([candidate_perm]))
+        candidates = evaluate_permutation_delta_batch([current], repaired, self.model)
+        candidate = candidates[0]
 
-            if not (math.isfinite(candidate.cost) and math.isfinite(current.cost)):
-                continue
-
+        if candidate.cost <= current.cost:
+            self.population[0] = candidate
+        elif math.isfinite(candidate.cost) and math.isfinite(current.cost):
             delta = candidate.cost - current.cost
             if np.random.random() < math.exp(-delta / self.temperature):
-                self.population[i] = candidate
-
-        immigrants = self.maybe_generate_immigrants()
-        if immigrants:
-            replace_idx = np.random.choice(self.population_size, size=len(immigrants), replace=False)
-            for idx, immigrant in zip(replace_idx, immigrants):
-                self.population[idx] = immigrant
+                self.population[0] = candidate
 
         self.temperature = max(self.min_temperature, self.temperature * self.cooling_rate)
