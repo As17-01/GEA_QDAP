@@ -4,20 +4,22 @@ This project solves the Generalized Quadratic Assignment Problem (GQAP, see
 [PROBLEM_DESCRIPTION.md](PROBLEM_DESCRIPTION.md)) with ten metaheuristics, all sharing
 the same solution representation, problem instance format, and a common scaffolding
 class (`BaseGA`). This document describes that shared scaffolding first, then each
-algorithm built on top of it.
+algorithm built on top of it, then the tuning and experimental procedures.
+
+---
 
 ## Shared framework (`src/algos/base.py`)
 
 ### Representation
 
-A candidate solution (`Individual`, in `src/data/models.py`) is a permutation array
-`permutation` of length `J` (number of jobs), where `permutation[j]` is the facility
-index assigned to job `j`. Alongside it, every `Individual` carries:
+A candidate solution (`Individual`, in `src/data/models.py`) is an integer array
+`permutation` of length `J` (number of jobs), where `permutation[j]` is the index of
+the facility assigned to job `j`. Alongside it, every `Individual` carries:
 
-- `cost`: the GQAP objective value (`inf` if the assignment violates a facility's
+- `cost`: the GQAP objective value (`inf` if the assignment violates any facility's
   capacity)
 - `cvar`: per-facility remaining capacity slack (`b_i - load_i`), used by some
-  operators below as a feasibility-robustness signal, not just by repair
+  operators as a feasibility-robustness signal
 
 A problem instance (`Model`) holds the assignment-cost matrix `cij`, resource-usage
 matrix `aij`, facility capacities `bi`, facility-distance matrix `DIS`, and
@@ -28,74 +30,83 @@ job-interaction matrix `F`.
 `cost_function_perm` computes a permutation's cost from scratch (assignment cost +
 quadratic interaction cost), returning `inf` if any facility is over capacity.
 `cost_function_perm_delta` computes the same cost incrementally from a known-feasible
-baseline cost, touching only the positions that changed — an O(K·J) update instead of
-a full O(J²) recompute when K (positions changed) is small, which is the common case
-for a single crossover or mutation. Every algorithm below routes its offspring through
-the batched version of this (`evaluate_permutation_delta_batch`), each paired with
-whichever parent/individual it's "closest to" so the delta stays cheap.
+baseline cost, touching only the positions that changed — O(K·J) instead of O(J²)
+when K changed positions is small. Every algorithm routes offspring through the
+batched version (`evaluate_permutation_delta_batch`), each child paired with whichever
+parent it is "closest to" so the delta stays cheap.
 
 ### Operators
 
-**Crossover** (`src/operators/crossover.py`), dispatched uniformly at random by
-`choose_crossover` unless an algorithm calls a specific one directly:
+All GA-based algorithms in this project share the same operator sets, dispatched
+uniformly at random by `choose_crossover` / `choose_mutation`. Operator consistency
+across algorithms is a design requirement: each algorithm is only distinguished by
+*how* it applies and combines these operators, not *which* operators it has access to.
+
+**Crossover** (`src/operators/crossover.py`) — four operators:
 
 | Operator | Mechanism |
 |---|---|
 | `crossover_one_point` | Splits both parents at one random point; each child is one parent's prefix + the other's suffix. |
 | `crossover_two_point` | Splices a random middle segment from one parent into the other's copy, and vice versa. |
-| `crossover_uniform` | Per-gene coin flip decides which parent each child inherits from. |
-| `crossover_greedy` | Per-gene, child 1 takes whichever parent's assignment is cheaper (`cij`); child 2 takes the complementary (worse-of) gene, so the pair still spans the same diversity a random crossover would. |
+| `crossover_uniform` | Per-gene coin flip decides which parent each child inherits from at each position. |
+| `crossover_greedy` | Per-gene, child 1 takes whichever parent's assignment is cheaper (`cij`); child 2 takes the complementary gene, spanning the same diversity as a random crossover. |
 
-**Mutation** (`src/operators/mutations.py`), dispatched uniformly at random by
-`choose_mutation` unless an algorithm calls a specific one directly:
+**Mutation** (`src/operators/mutations.py`) — nine operators, including the five
+primary discrete moves (swap, big swap, insertion, reversion, random) plus four
+additional operators:
 
-| Operator | Mechanism |
-|---|---|
-| `mutation_swap` | Swaps two adjacent genes. |
-| `mutation_reversion` | Reverses a random contiguous segment. |
-| `mutation_insertion` | Moves a random segment to a different position. |
-| `mutation_big_swap` | Swaps two genes at arbitrary (non-adjacent) positions. |
-| `mutation_random` | Reassigns 1–5 random genes to brand-new random facilities ("gene injection" — fresh genetic material rather than a perturbation of the existing assignment). |
-| `mutation_scramble` | Shuffles the values within a random window of 3–5 genes. |
-| `mutation_cyclic_shift` | Cyclically rotates 3 random genes. |
-| `mutation_greedy_reassign` | Directed move: finds the single worst-assigned job and reassigns it to the cheapest facility with spare capacity. |
-| `mutation_migration` | Capacity-aware: moves the priciest job out of the most-loaded facility into the facility with the most spare capacity. |
+| Operator | Category | Mechanism |
+|---|---|---|
+| `mutation_swap` | Primary | Swaps two adjacent genes. |
+| `mutation_big_swap` | Primary | Swaps two genes at arbitrary (non-adjacent) positions. |
+| `mutation_insertion` | Primary | Moves a random segment to a different position. |
+| `mutation_reversion` | Primary | Reverses a random contiguous segment. |
+| `mutation_random` | Primary | Reassigns 1–5 random genes to brand-new random facilities (fresh genetic material). |
+| `mutation_scramble` | Extended | Shuffles the values within a random window of 3–5 genes. |
+| `mutation_cyclic_shift` | Extended | Cyclically rotates 3 random genes. |
+| `mutation_greedy_reassign` | Directed | Finds the single worst-assigned job and reassigns it to the cheapest feasible facility. |
+| `mutation_migration` | Directed | Moves the priciest job out of the most-loaded facility into the facility with the most spare capacity. |
+
+Mutation is applied **per-individual as a discrete operator**: one randomly chosen
+operator is applied to the whole individual with probability `mutation_rate`.
+Iterating over every gene with a small per-gene probability is not used — it raises
+complexity unnecessarily and conflates operator application with gene-level probability.
 
 ### Repair (`src/repair.py`)
 
-Random initialization and every crossover/mutation can produce an infeasible
-permutation (a facility over capacity). Repair iteratively evicts an overloaded
-facility's job and reassigns it to a facility with spare capacity, until feasible or a
-repair-attempt budget is exhausted:
+Every crossover and mutation can produce an infeasible permutation (a facility over
+capacity). Repair iteratively evicts an overloaded facility's job and reassigns it
+until feasible:
 
-- **`GreedyRepair`**: deterministic — always evicts the worst capacity violation and
-  reassigns to the cheapest feasible facility.
-- **`RFRepair`** (the default for the GEA family): evicts from and reassigns to a
-  random subsample of candidates instead of the single greedy best, trading exact
-  greediness for population diversity.
+- **`GreedyRepair`**: deterministic — always picks the worst capacity violation and
+  reassigns to the cheapest feasible facility. Used by `StandardGA` and `SA`.
+- **`RFRepair`** (default for the GEA family): picks from a random subsample of
+  candidates instead of the single greedy best, trading exactness for population
+  diversity.
 
 ### Selection (`src/selection.py`, `DiversitySelector`)
 
-- **Parent selection**: roulette wheel weighted by a softmax over each individual's
-  mean Hamming distance to the rest of the population (more distinctive individuals
-  are more likely to be picked as parents).
-- **Survivor selection**: the cheapest `elite_fraction` of the merged pool
-  (parents + offspring + mutants + immigrants, deduplicated) survives outright as
-  elites; the rest is ranked by `diversity_weight · diversity_score + cost_weight ·
-  cost_score`, with `diversity_weight` decaying linearly over the run so later
-  generations converge instead of being held apart by the diversity term.
+Used by the GEA family; not used by `StandardGA` or `SA`.
+
+- **Parent selection**: roulette wheel weighted by each individual's mean Hamming
+  distance to the rest of the population — more distinctive individuals are more
+  likely to be picked as parents.
+- **Survivor selection**: the cheapest `elite_fraction` of the merged pool (parents +
+  offspring + mutants + immigrants, deduplicated) survives as elites; the rest is
+  ranked by `diversity_weight · diversity_score + cost_weight · cost_score`, with
+  `diversity_weight` decaying linearly over the run so later generations converge.
 
 ### Local search (memetic polish)
 
-Each generation, the top 3 individuals get a per-job hill-climbing pass (try every
-facility for each job, keep whichever lowers cost), auto-disabled above `J = 50` jobs
-where the O(J·I) cost isn't worth it.
+Each generation, the top 3 individuals receive a per-job hill-climbing pass (try every
+facility for each job, keep whichever lowers cost). Auto-disabled above `J = 50` jobs
+where the O(J·I) cost per pass dominates runtime.
 
 ### Run loop
 
 `run(time_limit)` initializes the population, then repeatedly calls the subclass's
 `step()`, re-sorts by cost, polishes elites, and stops once `time_limit` (wall-clock
-seconds) or `iterations` is reached, returning the best `Individual` found.
+seconds) or `iterations` is reached.
 
 ---
 
@@ -105,159 +116,236 @@ seconds) or `iterations` is reached, returning the best `Individual` found.
 
 The textbook simple genetic algorithm, kept as close to Holland's original description
 as the capacity-constrained encoding allows. It deliberately **does not** use any of
-this project's own enhancements below:
+this project's own GEA enhancements:
 
 - **Selection**: plain fitness-proportionate (roulette wheel) selection on raw cost
   (`fitness = 1 / (cost + ε)`) — no diversity weighting.
-- **Crossover**: single-point crossover, applied with probability `crossover_rate` per
-  mating pair; otherwise the pair passes through unchanged.
-- **Mutation**: per-gene mutation with probability `mutation_rate` — each gene
-  independently has a chance to be reassigned to a random facility.
-- **Replacement**: full generational replacement (children entirely replace the
-  population), with a minimal single-individual elitism (`elitism_count`, default `1`)
-  so the best-found solution is never lost to randomness — the one common,
-  near-universal addition to Holland's description.
-- No diversity selection, no randomized repair sampling (uses deterministic
-  `GreedyRepair` by default), no stagnation immigrants, no memetic local search.
+- **Crossover**: one operator chosen uniformly at random from the four operators above
+  (`choose_crossover`), applied with probability `crossover_rate` per mating pair;
+  otherwise the pair passes through unchanged.
+- **Mutation**: with probability `mutation_rate`, one operator chosen uniformly at
+  random from the nine operators above is applied to the individual as a whole — no
+  per-gene iteration.
+- **Replacement**: full generational replacement with single-individual elitism
+  (`elitism_count`, default `1`) so the best solution is never lost to randomness.
+- No diversity selection, no `RFRepair` (uses deterministic `GreedyRepair`), no
+  stagnation immigrants, no memetic local search.
 
-This is the literal baseline the rest of the algorithms in this project are compared
-against.
+This is the literal baseline the rest of the algorithms are compared against.
+
+> **Design notes:** Uses all four crossover operators (`choose_crossover`) and all nine
+> mutation operators (`choose_mutation`), including the five primary discrete mutation
+> operators: swap, big swap, insertion, reversion, and random. Mutation is applied as a
+> discrete per-individual operator, not as a per-gene Bernoulli trial.
+
+---
 
 ## 2. `GEA` (`src/algos/ga_gea.py`)
 
-This project's own enhanced GA. Where `StandardGA` above deliberately bypasses most of
-the "Shared framework" section (it implements its own selection and replacement instead
-of calling into it), `GEA` is the opposite case: it doesn't override or opt out of
-anything described there. Concretely, with fixed crossover and mutation rates:
+This project's own enhanced GA. Where `StandardGA` deliberately bypasses most of the
+shared framework, `GEA` is the opposite: it uses every component described there with
+fixed crossover and mutation rates:
 
 - **Selection**: `DiversitySelector` (diversity-weighted roulette parents, elite +
-  diversity/cost hybrid survivors — see "Shared framework" above).
+  diversity/cost hybrid survivors).
 - **Crossover / mutation**: each generation draws `crossover_rate · population_size`
-  crossovers (rounded to an even count) and `mutation_rate · population_size`
-  mutations, each via `choose_crossover` / `choose_mutation`'s random dispatch.
-- **Repair**: `RFRepair` by default (randomized, diversity-preserving).
-- **Stagnation immigrants**: if `best_solution` hasn't improved for
-  `stagnation_limit` iterations, `immigrant_rate · population_size` fresh random
-  individuals are injected to give crossover new material to recombine with.
-- **Memetic local search**: enabled (see "Shared framework").
+  crossovers and `mutation_rate · population_size` mutations, each via `choose_crossover`
+  / `choose_mutation` (same four crossover and nine mutation operators as `StandardGA`).
+- **Repair**: `RFRepair` by default.
+- **Stagnation immigrants**: if best solution hasn't improved for `stagnation_limit`
+  iterations, `immigrant_rate · population_size` fresh random individuals are injected.
+- **Memetic local search**: enabled.
+
+> **Design notes:** The goal of GEA and its three scenario variants is to **enhance**
+> the original GEA framework, not to replace it. The base crossover and mutation
+> operator sets are identical across GEA, GEAScenario1, GEAScenario2, GEAScenario3,
+> HybridGAPSO, and HybridGASA. Each scenario adds one additional operator on top of
+> the standard crossover + mutation pair, at a fixed rate, without any adaptive control.
+
+---
 
 ## 3. `AdaptiveGEA` (`src/algos/ga_adaptive.py`)
 
-The self-adaptive variant proposed for this project: identical to `GEA`, except the
-crossover and mutation rates are no longer fixed — each is scaled by its own lambda
-multiplier (`lambda_crossover`, `lambda_mutation`, both starting at `1.0`) that adapts
-every generation to how much improvement that operator actually produced:
+> **Scope note:** This algorithm is included in tuning and final experiment runs
+> alongside the rest of the algorithms, but its results **may not be reported** in this
+> paper. It will be formally proposed in a follow-up project with a new cost function.
 
-1. Each offspring/mutant's improvement over its **own parent baseline** is normalized:
-   `delta = (parent_cost - child_cost) / (parent_cost + epsilon)`, and accumulated
-   per operator (crossover sum, mutation sum).
-   - Comparing to the parent baseline (not the global best) is a deliberate choice:
-     comparing every child to the best-ever solution makes delta almost always
-     negative once the population is decent, which would drive both lambdas toward
-     `lambda_min` exactly as the run converges — choking off the exploration needed to
-     escape a local optimum.
-2. `lambda_new = clip(lambda_old + alpha * delta_sum, lambda_min, lambda_max)`.
-3. Next generation's operator counts become
-   `base_rate · population_size · lambda` instead of just `base_rate · population_size`.
+Identical to `GEA` except the crossover and mutation rates adapt every generation
+based on how much improvement each operator produced. Each operator's rate is scaled by
+a lambda multiplier (`lambda_crossover`, `lambda_mutation`, both starting at `1.0`):
 
-An operator that's currently producing improvements gets used more; one that isn't
-gets throttled back, without any manual per-instance rate tuning.
+1. Each offspring's improvement over its **own parent baseline** is normalized:
+   `delta = (parent_cost - child_cost) / (parent_cost + epsilon)`, accumulated per
+   operator. Comparing to the parent (not the global best) prevents lambda from
+   collapsing toward `lambda_min` once the population converges.
+2. `lambda_new = clip(lambda_old + alpha · delta_sum, lambda_min, lambda_max)`.
+3. Next generation's operator counts become `base_rate · population_size · lambda`.
+
+---
 
 ## 4. `SimulatedAnnealing` (`src/algos/ga_sa.py`)
 
-> Bertsimas, D., & Tsitsiklis, J. (1993). Simulated annealing. *Statistical Science*, 8(1), 10–15.
+> Bertsimas, D., & Tsitsiklis, J. (1993). Simulated annealing. *Statistical Science*,
+> 8(1), 10–15.
 
-Classic SA anneals a single solution; here the population is a bank of independent
-annealing chains (one walker per population slot) sharing a single global temperature
-schedule, reusing `BaseGA`'s batched repair/evaluation instead of looping one
-permutation at a time in pure Python.
+Classic **single-solution** SA. Population size is forced to `1` — population-based SA
+is not acceptable in the literature; the algorithm starts from one initial solution and
+anneals it only. Each iteration, one neighbor is proposed via `choose_mutation` and:
 
-Each iteration, every walker proposes one neighbor via `choose_mutation` and:
-- accepts it outright if it's better (`cost ≤` current), or
-- accepts it with Metropolis probability `exp(-Δ/T)` if it's worse,
+- accepted outright if better (`cost ≤ current`), or
+- accepted with Metropolis probability `exp(-Δ/T)` if worse.
 
-then the shared temperature is cooled geometrically: `T ← max(T_min, T · cooling_rate)`.
-There is no crossover and no selection pressure between walkers — each chain only ever
-competes against its own previous state. Stagnation immigrants are still used (replacing
-random walkers, not added to a larger pool).
+Temperature is cooled geometrically after each step:
+`T ← max(T_min, T · cooling_rate)`. There is no crossover, no population selection,
+no immigrants.
+
+> **Design notes:** A population-based multi-walker SA would share a temperature
+> schedule across independent chains with no selection pressure between them — this
+> does not correspond to the SA algorithm described in the literature. The
+> single-solution version is used throughout this project.
+
+---
 
 ## 5. `ParticleSwarm` (`src/algos/ga_pso.py`)
 
-> Kennedy, J., & Eberhart, R. (1995, November). Particle swarm optimization. *Proceedings of ICNN'95* (Vol. 4, pp. 1942–1948).
+> Kennedy, J., & Eberhart, R. (1995, November). Particle swarm optimization.
+> *Proceedings of ICNN'95* (Vol. 4, pp. 1942–1948).
 
-There's no continuous position/velocity in a permutation encoding. Following the common
-discrete-PSO convention for permutation problems, each particle's "pull" is realized via
-existing operators instead of vector arithmetic:
+Discrete PSO adapted for integer-encoded assignment problems. The original PSO operates
+over a continuous real-valued space; here each gene `x[j]` is an integer facility
+index. The standard PSO velocity equation is preserved exactly, but applied over the
+integer domain via rounding and clamping:
 
-- with probability `inertia_weight`: a random move via `choose_mutation` (exploration)
-- with probability `cognitive_weight`: crossover with the particle's own personal best
-- with probability `social_weight`: crossover with the swarm's global best
+**Velocity update** (real-valued, one entry per job):
+```
+v[j] ← w · v[j]
+      + c1 · r1 · (pbest[j] − x[j])    # cognitive: pull toward personal best
+      + c2 · r2 · (gbest[j] − x[j])    # social:    pull toward global best
+```
 
-(the three weights are normalized to sum to 1). Each particle tracks its own position
-and personal best independently of `self.population`'s ordering — `BaseGA.run()`
-re-sorts `self.population` by cost after every step, which would scramble a particle's
-identity if it were tracked by position in that list instead.
+**Position update** (integer, clamped to valid facility range):
+```
+x_new[j] = clip( round( x[j] + v[j] ), 0, I−1 )  →  repair  →  evaluate
+```
+
+Velocity is clamped to `[−I, I]` (I = number of facilities) to bound the maximum
+step size. This extension preserves the original PSO velocity semantics — cognitive
+and social pulls are proportional to the integer distance between positions —
+while mapping updates back into the feasible integer domain via rounding and repair.
+
+Particle identity (`self.particles` / `self.personal_best` / `self.velocities`) is
+maintained separately from `self.population`'s ordering, since `BaseGA.run()` re-sorts
+`self.population` by cost after every step, which would corrupt positional identity.
+
+> **Design notes:** PSO is a continuous-space algorithm by origin. Applying it directly
+> to integer-encoded GQAP requires explicit justification: the velocity equation
+> produces a real-valued displacement, which is discretized to the nearest integer
+> facility index and then repaired for capacity feasibility. This is the standard
+> extension used in the discrete/integer PSO literature for non-permutation integer
+> problems.
+
+---
 
 ## 6. `HybridGAPSO` (`src/algos/ga_hybrid_gapso.py`)
 
-> Juang, C. F. (2004). A hybrid of genetic algorithm and particle swarm optimization for recurrent network design. *IEEE Transactions on Systems, Man, and Cybernetics, Part B*, 34(2), 997–1006.
+> Juang, C. F. (2004). A hybrid of genetic algorithm and particle swarm optimization
+> for recurrent network design. *IEEE Transactions on Systems, Man, and Cybernetics,
+> Part B*, 34(2), 997–1006.
 
 Each generation, the population is ranked by cost and split in two:
 
-- the better-ranked `pso_fraction` undergo the PSO-style move described above
-  (exploitation, pulled toward personal/global best)
-- the rest are regenerated by ordinary GA crossover + mutation, selected from
-  among themselves via `select_from_pool` (exploration)
+- the better-ranked `pso_fraction` undergo a PSO-style discrete move (exploitation,
+  pulled toward personal best or global best via `choose_crossover`, or diversified via
+  `choose_mutation` for the inertia term)
+- the rest are regenerated by ordinary GA crossover + mutation via `choose_crossover` /
+  `choose_mutation`, selected via `select_from_pool` (exploration)
 
-An elitist replacement step then guarantees the swarm's best-ever solution survives
-into the next generation even if every particle's own move that round was a loss, as in
-the original paper.
+An elitist replacement step guarantees the swarm's best-ever solution survives into
+the next generation, as in the original paper.
+
+> **Design notes:** The GA component uses the same `choose_crossover` / `choose_mutation`
+> operator sets as all other algorithms in this project.
+
+---
 
 ## 7. `HybridGASA` (`src/algos/ga_hybrid_gasa.py`)
 
-> Chen, P. H., & Shahandashti, S. M. (2009). Hybrid of genetic algorithm and simulated annealing for multiple project scheduling with multiple resource constraints. *Automation in Construction*, 18(4), 434–443.
+> Chen, P. H., & Shahandashti, S. M. (2009). Hybrid of genetic algorithm and simulated
+> annealing for multiple project scheduling with multiple resource constraints.
+> *Automation in Construction*, 18(4), 434–443.
 
-GA crossover/mutation still supplies every candidate move; what changes is the
-acceptance rule. Each child must first pass a Metropolis test against its own parent
-baseline before it's even eligible to join the survivor pool: a child better than its
-baseline is always accepted, a worse one only gets a chance proportional to
-`exp(-Δ/T)`. `T` anneals down geometrically over the run, so early generations tolerate
-quality-losing moves (escaping local optima) while late generations behave like a plain
-elitist GA.
+GA crossover + mutation (via `choose_crossover` / `choose_mutation`, same operator sets
+as all other algorithms) supply every candidate move; what changes is the **acceptance
+rule**. Each child must first pass a Metropolis test against its own parent baseline
+before it is eligible to join the survivor pool:
+
+- a child better than its baseline is always accepted,
+- a worse child is accepted with probability `exp(-Δ/T)`.
+
+`T` anneals down geometrically over the run, so early generations tolerate
+quality-losing moves (escaping local optima) while late generations behave like a
+plain elitist GA.
+
+> **Design notes:** This hybrid retains a population-based structure (unlike standalone
+> SA, §4), which is appropriate here because the annealing only governs the *acceptance
+> criterion* — the population-level crossover and diversity selection still operate as
+> in GEA.
+
+---
 
 ## 8. `GEAScenario1` — Crossover with Robust Chromosome (`src/algos/ga_gea_scenario_1.py`)
 
-Modernization of `GEA`: replaces its randomly-dispatched crossover with a new operator,
-**RC (Robust Chromosome) crossover** — per gene, the child inherits from whichever
-parent's assigned facility has *more remaining capacity slack* (`cvar`), i.e. the more
-capacity-robust gene, independent of its assignment cost. This operator's rate is
-scaled by its own adaptive `lambda_rc` multiplier, using the exact same update/clip
-rule `AdaptiveGEA` uses for `lambda_crossover`:
+Modernization of `GEA` — Scenario 1: **RC (Robust Chromosome) crossover**.
 
-(a) apply RC crossover, evaluate offspring;
-(b) compute `delta_rc` against each offspring's parent baseline;
-(c) `lambda_rc ← lambda_rc + alpha · delta_rc`;
-(d) clip `lambda_rc` to `[lambda_min, lambda_max]`.
+Runs three operators each generation at **fixed rates** — no adaptive lambda:
 
-Mutation stays GEA's regular, non-adaptive mixed mutation operator.
+1. **Regular crossover** (`choose_crossover`, all 4 operators) at `crossover_rate`.
+2. **Regular mutation** (`choose_mutation`, all 9 operators) at `mutation_rate`.
+3. **RC crossover** (`rc_rate`): per gene, the child inherits from whichever parent's
+   assigned facility has *more remaining capacity slack* (`cvar`) — the more
+   capacity-robust gene, independent of its assignment cost.
+
+All three sets of offspring are pooled with the current population; `DiversitySelector`
+picks the next generation.
+
+> **Design notes:** Adaptive lambda control (`lambda_rc`, `alpha`, `epsilon`) has been
+> removed from this scenario. The adaptive version is out of scope for this paper and
+> will be proposed separately. All crossover and mutation operators are identical to
+> those used in the base GEA and StandardGA.
+
+---
 
 ## 9. `GEAScenario2` — Directed Mutation (`src/algos/ga_gea_scenario_2.py`)
 
-Modernization of `GEA`: replaces its randomly-dispatched mutation with
-**DM (Directed Mutation)** — reuses `mutation_greedy_reassign` (move the single
-worst-assigned job to its cheapest feasible facility), a directed, fitness-improving
-move rather than a blind random one. Its rate is scaled by an adaptive `lambda_dm`
-multiplier, updated and clipped the same way as `lambda_rc` above. Crossover stays
-GEA's regular, non-adaptive mixed crossover operator.
+Modernization of `GEA` — Scenario 2: **DM (Directed Mutation)**.
+
+Runs three operators each generation at **fixed rates** — no adaptive lambda:
+
+1. **Regular crossover** (`choose_crossover`, all 4 operators) at `crossover_rate`.
+2. **Regular mutation** (`choose_mutation`, all 9 operators) at `mutation_rate`.
+3. **DM** (`mutation_greedy_reassign`, `dm_rate`): moves each selected individual's
+   single worst-assigned job to its cheapest feasible facility — a directed,
+   fitness-improving move rather than a blind random one.
+
+> **Design notes:** As with Scenario 1, adaptive lambda control has been removed.
+> Crossover and mutation operator sets are identical to the rest of the family.
+
+---
 
 ## 10. `GEAScenario3` — Gene Injection (`src/algos/ga_gea_scenario_3.py`)
 
-Modernization of `GEA`: adds a **third** operator, **GI (Gene Injection)**, alongside
-GEA's regular fixed-rate crossover and mutation. GI reuses `mutation_random` (replace a
-handful of random genes with brand-new random facility assignments), injecting fresh
-genetic material rather than perturbing the existing assignment. Its own rate is scaled
-by an adaptive `lambda_gi` multiplier, updated and clipped the same way as `lambda_rc`
-and `lambda_dm` above.
+Modernization of `GEA` — Scenario 3: **GI (Gene Injection)**.
+
+Runs three operators each generation at **fixed rates** — no adaptive lambda:
+
+1. **Regular crossover** (`choose_crossover`, all 4 operators) at `crossover_rate`.
+2. **Regular mutation** (`choose_mutation`, all 9 operators) at `mutation_rate`.
+3. **GI** (`mutation_random`, `injection_rate`): replaces a handful of random genes
+   with brand-new random facility assignments, injecting fresh genetic material rather
+   than perturbing the existing assignment.
+
+> **Design notes:** As with Scenarios 1 and 2, adaptive lambda control has been
+> removed. Crossover and mutation operator sets are identical to the rest of the family.
 
 ---
 
@@ -265,6 +353,118 @@ and `lambda_dm` above.
 
 `GSAIS-KMeans`, `GSAIS-DBSCAN`, and `GSAIS-NN` (Gromov, Sohrabi, & Fathollahi-Fard,
 *Genetic Speciation Algorithm with Interplay among Species*, under review at
-*Algorithms*) were requested but are **not implemented**: the paper is unpublished and
-not available, so there's no reliable basis for a faithful implementation of its
-speciation/interplay mechanism.
+*Algorithms*) are **not implemented**: the paper is unpublished and not yet available,
+so there is no reliable basis for a faithful implementation of the speciation/interplay
+mechanism. This is acceptable at the current stage.
+
+---
+
+## Hyperparameter Tuning (`scripts/tune_algorithm.py`)
+
+Tuning is performed using the **Taguchi method**: an orthogonal array experiment that
+efficiently explores a discrete grid of candidate hyperparameter combinations with far
+fewer runs than a full factorial search.
+
+### Method
+
+For each algorithm, **three candidate values** are defined per tunable hyperparameter.
+These candidate values are provided by the research team based on domain knowledge and
+preliminary exploration. The candidates are arranged into a Taguchi orthogonal array
+(e.g. L9 for up to 4 factors, L27 for up to 13 factors), where each row of the array
+is one parameter combination to evaluate.
+
+Each combination is run **30 times** on a single representative test problem, and the
+result considered for that combination is the **average of the 30 minimum costs** found
+across those runs. The winning combination is the one with the lowest average.
+
+After selecting the best combination, **Relative Percentage Deviation (RPD)** is
+computed for each candidate combination:
+
+```
+RPD = (cost_candidate − cost_best) / cost_best × 100 %
+```
+
+where `cost_best` is the minimum cost found across all combinations. RPD plots and a
+parameter-combination table are reported in the paper.
+
+### Infrastructure (`scripts/tune_algorithm.py`)
+
+The current implementation uses **Optuna** (Bayesian / TPE search) over continuous
+parameter ranges as a working approximation until the Taguchi candidate values are
+finalized by the research team. Once the three candidate values per parameter are
+provided, the search will be replaced with a Taguchi orthogonal-array grid.
+
+Each algorithm has its own tune config in `scripts/conf/tune_algorithm/<algo>.yaml`,
+which specifies:
+- `runs`: number of independent runs per candidate (target: 30)
+- `n_candidates`: number of Optuna trials (will become number of Taguchi rows)
+- `param_space`: `[min, max]` bounds per parameter (will become `[v1, v2, v3]` lists)
+- `output_file`: path for tuning results JSON
+
+To run tuning for a specific algorithm:
+```bash
+poetry run python scripts/tune_algorithm.py --config-name="tune_algorithm/<algo>"
+# e.g.:
+poetry run python scripts/tune_algorithm.py --config-name="tune_algorithm/gea"
+```
+
+### Algorithms in scope for tuning
+
+| Algorithm | Key tunable parameters |
+|---|---|
+| `StandardGA` | `crossover_rate`, `mutation_rate`, `elitism_count` |
+| `GEA` | `crossover_rate`, `mutation_rate`, `stagnation_limit`, `immigrant_rate` |
+| `SA` | `initial_temperature`, `cooling_rate`, `min_temperature` |
+| `PSO` | `inertia_weight`, `cognitive_weight`, `social_weight`, `stagnation_limit` |
+| `HybridGAPSO` | `pso_fraction`, `inertia_weight`, `cognitive_weight`, `social_weight`, `crossover_rate`, `mutation_rate` |
+| `HybridGASA` | `crossover_rate`, `mutation_rate`, `initial_temperature`, `cooling_rate` |
+| `GEAScenario1` | `crossover_rate`, `mutation_rate`, `rc_rate`, `stagnation_limit` |
+| `GEAScenario2` | `crossover_rate`, `mutation_rate`, `dm_rate`, `stagnation_limit` |
+| `AdaptiveGEA` | `crossover_rate`, `mutation_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit` |
+| `GEAScenario3` | `crossover_rate`, `mutation_rate`, `injection_rate`, `stagnation_limit` |
+
+---
+
+## Final Experiment
+
+After tuning, each algorithm is run on every test case to produce the paper's
+main results table.
+
+### Protocol
+
+- **Runs per algorithm per test case**: 30 independent runs, each from a fresh random
+  seed.
+- **Time limit**: 1000 seconds of wall-clock time per run.
+- **Statistics reported**: Min, Max, AVG, Std across the 30 runs per (algorithm, test
+  case) cell. Additionally, the **number of Best** (algorithm achieves the best known
+  Min on that instance) and **number of Unique Best** (algorithm is the only one
+  achieving that Min) are reported at the bottom of the main table, computed from the
+  Min column.
+
+### Data stored per run
+
+Each run stores the following for analysis and plotting:
+
+1. **Best cost** — the minimum cost found at the end of the run (last element of the
+   BestCosts list below).
+2. **BestCosts list** — the running best cost recorded at every iteration, i.e.
+   `best_cost[t]` for `t = 1, 2, ..., T`. This list is used to plot minimization
+   curves and to compute the Std interval plots (§3.3.14).
+3. **NFE (Number of Function Evaluations)** — incremented each time the cost function
+   is called (each individual evaluated). Stored as a list per iteration and as a
+   final total. NFE reflects computational effort independently of wall-clock speed.
+
+### Analysis outputs
+
+| Output | Description |
+|---|---|
+| **Main results table** | Min / Max / AVG / Std × algorithm × test case; #Best and #Unique Best at the bottom. |
+| **Std interval plots** | Standard deviation across 30 runs plotted as a function of iteration, for all algorithms on each test case — measures robustness and convergence stability. |
+| **CPU time table** | Wall-clock time per run; plotted separately for small-scale and large-scale instances. |
+| **Optimality Gap (OG) table** | `(algo_min − exact) / exact × 100 %` for small-scale instances where the exact solution is known (e.g. `c201535`). |
+| **Hitting time** | Across the 30 runs, identifies the best run and records the iteration and wall-clock time at which the final minimum was first reached. Reported as a table or plot. |
+| **NFE table** | Final total NFE for each algorithm × test case, enabling comparison of computational effort relative to solution quality. |
+
+> **Implementation status:** The current run output (`run.py`) stores Min/Max/AVG/Std
+> across 30 runs per dataset. BestCosts per iteration, per-iteration NFE tracking,
+> hitting time, and OG are **pending implementation** in the output schema.
