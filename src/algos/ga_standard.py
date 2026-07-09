@@ -2,22 +2,24 @@ import numpy as np
 
 from src.algos.base import BaseGA
 from src.costs import evaluate_permutation_delta_batch
-from src.operators.crossover import crossover_one_point
+from src.operators.crossover import choose_crossover
+from src.operators.mutations import choose_mutation
 from src.repair import GreedyRepair
 
 
 class StandardGA(BaseGA):
     """Holland (1992). The textbook simple genetic algorithm: fitness-proportionate
-    (roulette wheel) selection on raw cost, single-point crossover applied with
-    probability `crossover_rate` per mating pair, per-gene mutation applied with
-    probability `mutation_rate`, and full generational replacement.
+    (roulette wheel) selection on raw cost, randomly-dispatched crossover from
+    {one-point, two-point, uniform, greedy} applied with probability `crossover_rate`
+    per mating pair, discrete mutation (one randomly-chosen operator applied per
+    individual) with probability `mutation_rate`, and full generational replacement
+    with single-individual elitism.
 
     No diversity-aware selection, no randomized repair sampling, no stagnation
     immigrants, no memetic local search -- those are this project's own enhancements
-    on top of the textbook algorithm (see ga_gea.py's GEA). This class is the literal
-    baseline they get compared against, kept as close to the original description as
-    the capacity-constrained encoding allows (repair is still needed for feasibility;
-    Holland's original had no constraints to repair).
+    (see ga_gea.py's GEA). This class is the literal baseline they get compared
+    against, kept as close to the original description as the capacity-constrained
+    encoding allows (repair is still needed for feasibility).
     """
 
     def __init__(
@@ -43,7 +45,6 @@ class StandardGA(BaseGA):
         self.elitism_count = elitism_count
 
     def polish_elites(self) -> None:
-        # The canonical algorithm has no memetic local search step.
         pass
 
     def _select_parents(self, n: int) -> np.ndarray:
@@ -60,13 +61,6 @@ class StandardGA(BaseGA):
         draws = np.random.random(size=n)
         return np.minimum(np.searchsorted(cumsum, draws, side="right"), len(probs) - 1)
 
-    def _mutate(self, perm: np.ndarray) -> np.ndarray:
-        mask = np.random.random(len(perm)) < self.mutation_rate
-        if mask.any():
-            perm = perm.copy()
-            perm[mask] = np.random.randint(0, self.model.I, size=int(mask.sum()))
-        return perm
-
     def step(self) -> None:
         n = self.population_size
         num_pairs = n // 2 + (n % 2)
@@ -79,14 +73,20 @@ class StandardGA(BaseGA):
             p1, p2 = self.population[i1], self.population[i2]
 
             if np.random.random() < self.crossover_rate:
-                (child1, base1), (child2, base2) = crossover_one_point((p1, p2), self.model)
+                (child1, base1), (child2, base2) = choose_crossover((p1, p2), self.model)
             else:
                 child1, base1 = p1.permutation, p1
                 child2, base2 = p2.permutation, p2
 
-            raw_perms.append(self._mutate(child1))
+            # Apply one discrete mutation operator per individual (not per-gene iteration).
+            if np.random.random() < self.mutation_rate:
+                child1 = choose_mutation(child1, self.model)
+            if np.random.random() < self.mutation_rate:
+                child2 = choose_mutation(child2, self.model)
+
+            raw_perms.append(child1)
             baselines.append(base1)
-            raw_perms.append(self._mutate(child2))
+            raw_perms.append(child2)
             baselines.append(base2)
 
         raw_perms = raw_perms[:n]
