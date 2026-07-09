@@ -13,5 +13,3 @@ tune:
     initial_temperature: [10.0, 200.0]
     cooling_rate: [0.90, 0.995]
     min_temperature: [0.0001, 0.01]
-    stagnation_limit: [10, 60]
-    immigrant_rate: [0.02, 0.3]
