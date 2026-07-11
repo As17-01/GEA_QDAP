@@ -1,10 +1,6 @@
 import math
 
-import numpy as np
-
 from src.algos.base import BaseGA
-from src.costs import evaluate_permutation_delta_batch
-from src.operators.mutations import mutation_greedy_reassign
 
 
 class GEAScenario2(BaseGA):
@@ -49,29 +45,6 @@ class GEAScenario2(BaseGA):
         self.crossover_rate = crossover_rate
         self.mutation_rate = mutation_rate
         self.dm_rate = dm_rate
-
-    def _directed_mutation(self, n):
-        mutations = []
-        valid = 0
-        new_best = 0
-
-        with self.logger.timed("mutation"):
-            if n > 0:
-                indices = np.random.randint(0, len(self.population), size=n)
-                baselines = [self.population[idx] for idx in indices]
-
-                raw_perms = np.array([mutation_greedy_reassign(b.permutation, self.model) for b in baselines])
-                repaired = self.repair_batch_wrapper(raw_perms)
-                mutations = evaluate_permutation_delta_batch(baselines, repaired, self.model)
-
-                for child in mutations:
-                    if math.isfinite(child.cost):
-                        valid += 1
-                        if child.cost < self.best_solution.cost:
-                            new_best += 1
-
-        self.logger.record_mutation(n, valid, new_best)
-        return mutations
 
     def step(self) -> None:
         probs = self.compute_selection_probabilities()

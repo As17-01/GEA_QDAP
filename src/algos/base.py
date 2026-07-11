@@ -12,8 +12,8 @@ from src.costs import (
     evaluate_permutation_delta_batch,
 )
 from src.data.models import Individual, Model
-from src.operators.crossover import choose_crossover
-from src.operators.mutations import choose_mutation
+from src.operators.crossover import choose_crossover, crossover_robust_chromosome
+from src.operators.mutations import choose_mutation, mutation_greedy_reassign, mutation_random
 from src.repair import RFRepair
 from src.selection import DiversitySelector
 
@@ -71,6 +71,7 @@ class BaseGA(ABC):
             perms = self.repair_batch_wrapper(perms)
 
             self.population = [evaluate_permutation(perms[i], self.model) for i in range(self.population_size)]
+            self.logger.record_nfe(self.population_size)
 
             self.population.sort(key=lambda x: x.cost)
             self.best_solution = self.population[0]
@@ -116,6 +117,7 @@ class BaseGA(ABC):
             if raw_perms:
                 repaired = self.repair_batch_wrapper(np.array(raw_perms))
                 children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                self.logger.record_nfe(len(raw_perms))
                 offspring = list(zip(children, baselines))
 
                 for child in children:
@@ -140,6 +142,7 @@ class BaseGA(ABC):
                 raw_perms = np.array([choose_mutation(b.permutation, self.model) for b in baselines])
                 repaired = self.repair_batch_wrapper(raw_perms)
                 children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                self.logger.record_nfe(n)
                 mutations = list(zip(children, baselines))
 
                 for ind in children:
@@ -158,7 +161,9 @@ class BaseGA(ABC):
         with self.logger.timed("immigrants"):
             perms = np.random.randint(0, self.model.I, size=(n, self.model.J), dtype=int)
             perms = self.repair_batch_wrapper(perms)
-            return [evaluate_permutation(perms[i], self.model) for i in range(n)]
+            immigrants = [evaluate_permutation(perms[i], self.model) for i in range(n)]
+            self.logger.record_nfe(n)
+            return immigrants
 
     def maybe_generate_immigrants(self) -> List[Individual]:
         """Called once per step, before this iteration's offspring/mutants are folded into
@@ -185,6 +190,7 @@ class BaseGA(ABC):
         with self.logger.timed("local_search"):
             perm = perm.copy()
             best_cost, _ = cost_function_perm(perm, self.model)
+            nfe = 1  # initial full eval above
 
             for _ in range(LOCAL_SEARCH_MAX_PASSES):
                 improved = False
@@ -204,6 +210,7 @@ class BaseGA(ABC):
                             cost, _ = cost_function_perm_delta(perm, trial_perm, best_cost, self.model)
                         else:
                             cost, _ = cost_function_perm(trial_perm, self.model)
+                        nfe += 1
                         if cost < best_cost:
                             best_cost = cost
                             best_facility = i
@@ -214,7 +221,96 @@ class BaseGA(ABC):
                 if not improved:
                     break
 
+            self.logger.record_nfe(nfe)
             return perm
+
+    def _robust_chromosome_crossover(self, probabilities: np.ndarray, n: int) -> List[Individual]:
+        """RC (Robust Chromosome) crossover driver: per gene, inherit from the parent with
+        more remaining capacity slack. Used by GEA and GEAScenario1."""
+        offspring = []
+        valid = 0
+        new_best = 0
+
+        n = n - (n % 2)
+        with self.logger.timed("crossover"):
+            num_pairs = n // 2
+            if num_pairs:
+                parent_indices = self.selector.roulette_wheel_selection_batch(probabilities, 2 * num_pairs)
+
+                raw_perms = []
+                baselines = []
+                for k in range(num_pairs):
+                    i1, i2 = parent_indices[2 * k], parent_indices[2 * k + 1]
+                    p1, p2 = self.population[i1], self.population[i2]
+
+                    (child1, base1), (child2, base2) = crossover_robust_chromosome(p1, p2, self.model)
+                    raw_perms.extend((child1, child2))
+                    baselines.extend((base1, base2))
+
+                repaired = self.repair_batch_wrapper(np.array(raw_perms))
+                offspring = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                self.logger.record_nfe(len(raw_perms))
+
+                for child in offspring:
+                    if math.isfinite(child.cost):
+                        valid += 1
+                        if child.cost < self.best_solution.cost:
+                            new_best += 1
+
+        self.logger.record_crossover(n, valid, new_best)
+        return offspring
+
+    def _directed_mutation(self, n: int) -> List[Individual]:
+        """DM (Directed Mutation) driver: moves each individual's worst-assigned job to its
+        cheapest feasible facility. Used by GEA and GEAScenario2."""
+        mutations = []
+        valid = 0
+        new_best = 0
+
+        with self.logger.timed("mutation"):
+            if n > 0:
+                indices = np.random.randint(0, len(self.population), size=n)
+                baselines = [self.population[idx] for idx in indices]
+
+                raw_perms = np.array([mutation_greedy_reassign(b.permutation, self.model) for b in baselines])
+                repaired = self.repair_batch_wrapper(raw_perms)
+                mutations = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                self.logger.record_nfe(n)
+
+                for child in mutations:
+                    if math.isfinite(child.cost):
+                        valid += 1
+                        if child.cost < self.best_solution.cost:
+                            new_best += 1
+
+        self.logger.record_mutation(n, valid, new_best)
+        return mutations
+
+    def _gene_injection(self, n: int) -> List[Individual]:
+        """GI (Gene Injection) driver: replaces a handful of random genes with new random
+        facility assignments. Used by GEA and GEAScenario3."""
+        injected = []
+        valid = 0
+        new_best = 0
+
+        with self.logger.timed("gene_injection"):
+            if n > 0:
+                indices = np.random.randint(0, len(self.population), size=n)
+                baselines = [self.population[idx] for idx in indices]
+
+                raw_perms = np.array([mutation_random(b.permutation, self.model) for b in baselines])
+                repaired = self.repair_batch_wrapper(raw_perms)
+                injected = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                self.logger.record_nfe(n)
+
+                for child in injected:
+                    if math.isfinite(child.cost):
+                        valid += 1
+                        if child.cost < self.best_solution.cost:
+                            new_best += 1
+
+        self.logger.record_mutation(n, valid, new_best)
+        return injected
 
     def polish_elites(self) -> None:
         if self.model.J > LOCAL_SEARCH_MAX_J:
@@ -259,6 +355,8 @@ class BaseGA(ABC):
 
             if self.best_solution.cost < prev_best - 1e-9:
                 self.hitting_time = self.logger.elapsed()
+
+            self.logger.record_best_cost(self.best_solution.cost)
 
             if it % 50 == 0:
                 if self.verbose:

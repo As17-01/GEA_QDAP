@@ -143,24 +143,32 @@ This is the literal baseline the rest of the algorithms are compared against.
 ## 2. `GEA` (`src/algos/ga_gea.py`)
 
 This project's own enhanced GA. Where `StandardGA` deliberately bypasses most of the
-shared framework, `GEA` is the opposite: it uses every component described there with
-fixed crossover and mutation rates:
+shared framework, `GEA` is the opposite: it uses every component described there and
+runs **five operator stages per generation** in fixed sequence:
 
-- **Selection**: `DiversitySelector` (diversity-weighted roulette parents, elite +
-  diversity/cost hybrid survivors).
-- **Crossover / mutation**: each generation draws `crossover_rate · population_size`
-  crossovers and `mutation_rate · population_size` mutations, each via `choose_crossover`
-  / `choose_mutation` (same four crossover and nine mutation operators as `StandardGA`).
+| Stage | Operator | Rate | Description |
+|---|---|---|---|
+| 1 | **Crossover** | `crossover_rate` | `choose_crossover` — one of the 4 standard operators, per pair. |
+| 2 | **Mutation** | `mutation_rate` | `choose_mutation` — one of the 9 standard operators, per individual. |
+| 3 | **RC crossover** | `rc_rate` | Robust Chromosome: per gene, inherit from whichever parent has more remaining capacity slack (`cvar`). |
+| 4 | **DM** | `dm_rate` | Directed Mutation: move each individual's single worst-assigned job to its cheapest feasible facility. |
+| 5 | **GI** | `injection_rate` | Gene Injection: replace a handful of random genes with fresh random facility assignments. |
+
+All five offspring pools are merged with the current population; `DiversitySelector`
+picks the next generation. Additional enhancements:
+
 - **Repair**: `RFRepair` by default.
 - **Stagnation immigrants**: if best solution hasn't improved for `stagnation_limit`
   iterations, `immigrant_rate · population_size` fresh random individuals are injected.
 - **Memetic local search**: enabled.
 
-> **Design notes:** The goal of GEA and its three scenario variants is to **enhance**
-> the original GEA framework, not to replace it. The base crossover and mutation
-> operator sets are identical across GEA, GEAScenario1, GEAScenario2, GEAScenario3,
-> HybridGAPSO, and HybridGASA. Each scenario adds one additional operator on top of
-> the standard crossover + mutation pair, at a fixed rate, without any adaptive control.
+> **Design notes:** `GEAScenario1`, `GEAScenario2`, and `GEAScenario3` are
+> **single-enhancement ablations** of this full variant — each adds only one of stages
+> 3, 4, or 5 on top of standard crossover + mutation, without the other two. The RC
+> crossover helper (`crossover_robust_chromosome`) is implemented once in
+> `src/operators/crossover.py`; the RC, DM, and GI driver methods live on `BaseGA`
+> (`_robust_chromosome_crossover`, `_directed_mutation`, `_gene_injection`) so all
+> subclasses that need them (GEA, Scenario1/2/3) inherit rather than duplicate them.
 
 ---
 
@@ -413,7 +421,7 @@ poetry run python scripts/tune_algorithm.py --config-name="tune_algorithm/gea"
 | Algorithm | Key tunable parameters |
 |---|---|
 | `StandardGA` | `crossover_rate`, `mutation_rate`, `elitism_count` |
-| `GEA` | `crossover_rate`, `mutation_rate`, `stagnation_limit`, `immigrant_rate` |
+| `GEA` | `crossover_rate`, `mutation_rate`, `rc_rate`, `dm_rate`, `injection_rate`, `stagnation_limit`, `immigrant_rate` |
 | `SA` | `initial_temperature`, `cooling_rate`, `min_temperature` |
 | `PSO` | `inertia_weight`, `cognitive_weight`, `social_weight`, `stagnation_limit` |
 | `HybridGAPSO` | `pso_fraction`, `inertia_weight`, `cognitive_weight`, `social_weight`, `crossover_rate`, `mutation_rate` |
@@ -447,12 +455,16 @@ Each run stores the following for analysis and plotting:
 
 1. **Best cost** — the minimum cost found at the end of the run (last element of the
    BestCosts list below).
-2. **BestCosts list** — the running best cost recorded at every iteration, i.e.
-   `best_cost[t]` for `t = 1, 2, ..., T`. This list is used to plot minimization
-   curves and to compute the Std interval plots (§3.3.14).
-3. **NFE (Number of Function Evaluations)** — incremented each time the cost function
-   is called (each individual evaluated). Stored as a list per iteration and as a
-   final total. NFE reflects computational effort independently of wall-clock speed.
+2. **BestCosts list** (`cost_history` in `GALogger`) — the running best cost recorded
+   at the end of every iteration, i.e. `best_cost[t]` for `t = 1, 2, ..., T`. Used to
+   plot minimization curves and to compute Std interval plots (§3.3.14). Saved only in
+   final experiment runs (`run.py`), not during tuning (memory-intensive for 30×n_candidates
+   trials). Also stored: `nfe_history[t]` — the cumulative NFE at the same snapshot points,
+   pairing each cost sample with its matching computational budget.
+3. **NFE (Number of Function Evaluations)** (`nfe` in `GALogger`) — incremented once
+   per individual cost evaluation: population initialization, each crossover/mutant/immigrant
+   child, and each local-search probe. The final total is stored per run; the average
+   across 30 runs per (algorithm, instance) pair is reported in the NFE table.
 
 ### Analysis outputs
 
@@ -463,8 +475,9 @@ Each run stores the following for analysis and plotting:
 | **CPU time table** | Wall-clock time per run; plotted separately for small-scale and large-scale instances. |
 | **Optimality Gap (OG) table** | `(algo_min − exact) / exact × 100 %` for small-scale instances where the exact solution is known (e.g. `c201535`). |
 | **Hitting time** | Across the 30 runs, identifies the best run and records the iteration and wall-clock time at which the final minimum was first reached. Reported as a table or plot. |
-| **NFE table** | Final total NFE for each algorithm × test case, enabling comparison of computational effort relative to solution quality. |
+| **NFE table** | Rounded average NFE for each algorithm × test case (2D table: rows = instances, columns = algorithms). Enables comparison of computational effort relative to solution quality. |
 
-> **Implementation status:** The current run output (`run.py`) stores Min/Max/AVG/Std
-> across 30 runs per dataset. BestCosts per iteration, per-iteration NFE tracking,
-> hitting time, and OG are **pending implementation** in the output schema.
+> **Implementation status:** `run.py` stores Min/Max/AVG/Std, hitting time, NFE
+> (per-run and mean), and full BestCosts + NFE histories per run (the latter only in
+> final-experiment runs, not during tuning). OG (Optimality Gap) is **pending** —
+> requires known exact solutions for the small-scale instances.

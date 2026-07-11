@@ -1,10 +1,6 @@
 import math
 
-import numpy as np
-
 from src.algos.base import BaseGA
-from src.costs import evaluate_permutation_delta_batch
-from src.operators.mutations import mutation_random
 
 
 class GEAScenario3(BaseGA):
@@ -49,29 +45,6 @@ class GEAScenario3(BaseGA):
         self.crossover_rate = crossover_rate
         self.mutation_rate = mutation_rate
         self.injection_rate = injection_rate
-
-    def _gene_injection(self, n):
-        injected = []
-        valid = 0
-        new_best = 0
-
-        with self.logger.timed("gene_injection"):
-            if n > 0:
-                indices = np.random.randint(0, len(self.population), size=n)
-                baselines = [self.population[idx] for idx in indices]
-
-                raw_perms = np.array([mutation_random(b.permutation, self.model) for b in baselines])
-                repaired = self.repair_batch_wrapper(raw_perms)
-                injected = evaluate_permutation_delta_batch(baselines, repaired, self.model)
-
-                for child in injected:
-                    if math.isfinite(child.cost):
-                        valid += 1
-                        if child.cost < self.best_solution.cost:
-                            new_best += 1
-
-        self.logger.record_mutation(n, valid, new_best)
-        return injected
 
     def step(self) -> None:
         probs = self.compute_selection_probabilities()
