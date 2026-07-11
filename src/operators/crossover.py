@@ -140,6 +140,36 @@ def crossover_greedy(parents: Sequence[Individual], model: Model) -> CrossoverRe
     return _pair_by_match_count(child1, child2, n_match_p1, n, p1, p2)
 
 
+@njit(fastmath=True, cache=True)
+def _crossover_robust_chromosome_nb(p1, p2, cvar1, cvar2):
+    """Per gene, inherit from whichever parent's assigned facility has more remaining
+    capacity slack (cvar) -- the more capacity-robust gene, independent of assignment cost.
+    Used by GEA and GEAScenario1 (Robust Chromosome crossover)."""
+    n = len(p1)
+    child1 = np.empty(n, dtype=p1.dtype)
+    child2 = np.empty(n, dtype=p1.dtype)
+    n_match_p1 = 0
+
+    for j in range(n):
+        if cvar1[p1[j]] >= cvar2[p2[j]]:
+            child1[j] = p1[j]
+            child2[j] = p2[j]
+            n_match_p1 += 1
+        else:
+            child1[j] = p2[j]
+            child2[j] = p1[j]
+
+    return child1, child2, n_match_p1
+
+
+def crossover_robust_chromosome(p1: Individual, p2: Individual, model: Model) -> CrossoverResult:
+    """Robust Chromosome (RC) crossover: per gene, the child inherits from whichever parent's
+    assigned facility has more remaining capacity slack. Used by GEA and GEAScenario1."""
+    n = len(p1.permutation)
+    child1, child2, n_match_p1 = _crossover_robust_chromosome_nb(p1.permutation, p2.permutation, p1.cvar, p2.cvar)
+    return _pair_by_match_count(child1, child2, n_match_p1, n, p1, p2)
+
+
 # Adding a new crossover operator is just adding it here -- choose_crossover picks
 # uniformly among whatever is listed, with no separate count to remember to update.
 CROSSOVER_OPERATORS = (
