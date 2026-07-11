@@ -95,6 +95,7 @@ class ParticleSwarm(BaseGA):
 
         repaired = self.repair_batch_wrapper(np.array(new_perms))
         updated = evaluate_permutation_delta_batch(self.particles, repaired, self.model)
+        self.logger.record_nfe(len(self.particles))
 
         for i, candidate in enumerate(updated):
             self.particles[i] = candidate

@@ -27,7 +27,7 @@ def main(cfg: DictConfig) -> None:
     print(f"   Workers      : {workers}")
     print(f"   GA params    : {cfg.ga}\n")
 
-    all_results = run_all_experiments(datasets, algo_label, ga_cfg, time_limit, runs, workers)
+    all_results = run_all_experiments(datasets, algo_label, ga_cfg, time_limit, runs, workers, track_history=True)
 
     out = SCRIPT_DIR / cfg.run.output_file
     out.parent.mkdir(parents=True, exist_ok=True)

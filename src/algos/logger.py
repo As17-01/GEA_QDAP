@@ -30,6 +30,17 @@ class GALogger:
         self._mutation_valid = 0
         self._mutation_new_best = 0
 
+        # NFE (Number of Function Evaluations): incremented once per individual cost
+        # evaluation (init population, each crossover/mutant/immigrant child, each
+        # local-search probe). Used to compare computational effort across algorithms
+        # independently of wall-clock speed.
+        self.nfe: int = 0
+        # Running best cost recorded at the end of every iteration -- used for
+        # convergence curve plots. nfe_history[t] is the cumulative NFE at that point,
+        # pairing each cost snapshot with its matching computational budget.
+        self.cost_history: List[float] = []
+        self.nfe_history: List[int] = []
+
     @contextmanager
     def timed(self, operation_name: str):
         start = time.perf_counter()
@@ -65,6 +76,13 @@ class GALogger:
         self._mutation_attempts += attempts
         self._mutation_valid += valid
         self._mutation_new_best += new_best
+
+    def record_nfe(self, n: int) -> None:
+        self.nfe += n
+
+    def record_best_cost(self, cost: float) -> None:
+        self.cost_history.append(cost)
+        self.nfe_history.append(self.nfe)
 
     def print_iteration_info(self, iteration: int, iter_time: float, best_cost: float, avg_diversity: float) -> None:
         """Print detailed information for every N iterations."""

@@ -65,11 +65,31 @@ def run_single_experiment(
         ga = hydra.utils.instantiate(ga_cfg, model=model)
         best = ga.run(time_limit=time_limit)
         hitting_time = getattr(ga, "hitting_time", None)
+        nfe = getattr(ga.logger, "nfe", 0)
+        cost_history = getattr(ga.logger, "cost_history", [])
 
-        return (dataset_name, run_num, best.cost, time.perf_counter() - start, hitting_time, None)
+        return {
+            "dataset": dataset_name,
+            "run": run_num,
+            "cost": best.cost,
+            "elapsed": time.perf_counter() - start,
+            "hitting_time": hitting_time,
+            "nfe": nfe,
+            "cost_history": cost_history,
+            "error": None,
+        }
 
     except Exception as e:
-        return (dataset_name, run_num, None, time.perf_counter() - start, None, str(e))
+        return {
+            "dataset": dataset_name,
+            "run": run_num,
+            "cost": None,
+            "elapsed": time.perf_counter() - start,
+            "hitting_time": None,
+            "nfe": 0,
+            "cost_history": [],
+            "error": str(e),
+        }
 
 
 def run_all_experiments(
@@ -79,6 +99,7 @@ def run_all_experiments(
     time_limit: float,
     runs: int,
     workers: int,
+    track_history: bool = False,
 ) -> List[dict]:
     """Runs every (dataset, run) combination across a process pool and returns one stats
     dict per dataset, in the same shape run_dataset_tests used to produce. Each run is an
@@ -89,6 +110,8 @@ def run_all_experiments(
     results_by_dataset: Dict[str, List[float]] = {ds: [] for ds in datasets}
     runtimes_by_dataset: Dict[str, List[float]] = {ds: [] for ds in datasets}
     hitting_times_by_dataset: Dict[str, List[float]] = {ds: [] for ds in datasets}
+    nfes_by_dataset: Dict[str, List[int]] = {ds: [] for ds in datasets}
+    histories_by_dataset: Dict[str, List[list]] = {ds: [] for ds in datasets}
     errors_by_dataset: Dict[str, int] = {ds: 0 for ds in datasets}
     completed_by_dataset: Dict[str, int] = {ds: 0 for ds in datasets}
 
@@ -101,15 +124,18 @@ def run_all_experiments(
 
         for future in as_completed(futures):
             ds, _ = futures[future]
-            _, _, cost, runtime, hitting_time, err = future.result()
+            res = future.result()
 
-            runtimes_by_dataset[ds].append(runtime)
-            if err:
+            runtimes_by_dataset[ds].append(res["elapsed"])
+            if res["error"]:
                 errors_by_dataset[ds] += 1
             else:
-                results_by_dataset[ds].append(cost)
-                if hitting_time is not None:
-                    hitting_times_by_dataset[ds].append(hitting_time)
+                results_by_dataset[ds].append(res["cost"])
+                if res["hitting_time"] is not None:
+                    hitting_times_by_dataset[ds].append(res["hitting_time"])
+                nfes_by_dataset[ds].append(res["nfe"])
+                if track_history and res["cost_history"]:
+                    histories_by_dataset[ds].append(res["cost_history"])
             completed_by_dataset[ds] += 1
 
             # Print one aggregated line per dataset, once all its runs are in, instead of
@@ -119,11 +145,13 @@ def run_all_experiments(
                 stats = calculate_statistics(results_by_dataset[ds])
                 total_runtime = sum(runtimes_by_dataset[ds])
                 avg_hit = statistics.mean(hitting_times_by_dataset[ds]) if hitting_times_by_dataset[ds] else None
+                avg_nfe = round(statistics.mean(nfes_by_dataset[ds])) if nfes_by_dataset[ds] else None
                 hit_note = f" ; avg hitting time = {avg_hit:.1f}s" if avg_hit is not None else ""
+                nfe_note = f" ; avg NFE = {avg_nfe:,}" if avg_nfe is not None else ""
                 error_note = f" ({errors_by_dataset[ds]} errors)" if errors_by_dataset[ds] else ""
                 print(
                     f"   {ds} run → avg cost = {stats['mean']:.2f} ; std = {stats['std']:.2f} ; "
-                    f"total runtime = {total_runtime:.2f}s{hit_note}{error_note}"
+                    f"total runtime = {total_runtime:.2f}s{hit_note}{nfe_note}{error_note}"
                 )
 
     return [
@@ -139,6 +167,14 @@ def run_all_experiments(
                     "std": float(statistics.stdev(hitting_times_by_dataset[ds])) if len(hitting_times_by_dataset[ds]) > 1 else 0.0,
                 }
             },
+            "nfe": {
+                algo_label: {
+                    "mean": round(statistics.mean(nfes_by_dataset[ds])) if nfes_by_dataset[ds] else None,
+                    "std": round(statistics.stdev(nfes_by_dataset[ds])) if len(nfes_by_dataset[ds]) > 1 else 0,
+                    "per_run": nfes_by_dataset[ds],
+                }
+            },
+            **({"cost_history": {algo_label: histories_by_dataset[ds]}} if track_history else {}),
             "errors": errors_by_dataset[ds],
         }
         for ds in datasets

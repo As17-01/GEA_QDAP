@@ -94,6 +94,7 @@ class StandardGA(BaseGA):
 
         repaired = self.repair_batch_wrapper(np.array(raw_perms))
         offspring = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+        self.logger.record_nfe(len(raw_perms))
 
         if self.elitism_count > 0:
             elites = sorted(self.population, key=lambda x: x.cost)[: self.elitism_count]

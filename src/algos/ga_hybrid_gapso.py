@@ -88,6 +88,7 @@ class HybridGAPSO(BaseGA):
         repaired = self.repair_batch_wrapper(np.array(new_perms))
         baselines = [self.particles[i] for i in idx]
         updated = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+        self.logger.record_nfe(len(idx))
 
         for i, candidate in zip(idx, updated):
             self.particles[i] = candidate

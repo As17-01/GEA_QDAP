@@ -57,6 +57,7 @@ class SimulatedAnnealing(BaseGA):
         candidate_perm = choose_mutation(current.permutation, self.model)
         repaired = self.repair_batch_wrapper(np.array([candidate_perm]))
         candidates = evaluate_permutation_delta_batch([current], repaired, self.model)
+        self.logger.record_nfe(1)
         candidate = candidates[0]
 
         if candidate.cost <= current.cost:
