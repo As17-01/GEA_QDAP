@@ -14,11 +14,14 @@ import os
 for _env_var in ("NUMBA_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
     os.environ.setdefault(_env_var, "1")
 
+import math
 import statistics
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from typing import Dict, List
+
+import numpy as np
 
 import hydra
 from omegaconf import OmegaConf
@@ -39,13 +42,16 @@ def timestamp() -> str:
 
 def calculate_statistics(values: List[float]) -> Dict[str, float]:
     if not values:
-        return {"mean": 0, "median": 0, "min": 0, "max": 0, "std": 0}
+        return {"mean": 0.0, "median": 0.0, "min": 0.0, "max": 0.0, "std": 0.0}
+    # numpy handles inf/nan without raising (statistics.stdev raises AttributeError
+    # on inf in Python 3.11). ddof=1 matches statistics.stdev (sample std).
+    arr = np.array(values, dtype=float)
     return {
-        "mean": float(statistics.mean(values)),
-        "median": float(statistics.median(values)),
-        "min": float(min(values)),
-        "max": float(max(values)),
-        "std": float(statistics.stdev(values)) if len(values) > 1 else 0.0,
+        "mean": float(np.mean(arr)),
+        "median": float(np.median(arr)),
+        "min": float(np.min(arr)),
+        "max": float(np.max(arr)),
+        "std": float(np.std(arr, ddof=1)) if len(values) > 1 else 0.0,
     }
 
 
@@ -64,31 +70,29 @@ def run_single_experiment(
         model = load_model(dataset_name)
         ga = hydra.utils.instantiate(ga_cfg, model=model)
         best = ga.run(time_limit=time_limit)
+        elapsed = time.perf_counter() - start
         hitting_time = getattr(ga, "hitting_time", None)
         nfe = getattr(ga.logger, "nfe", 0)
         cost_history = getattr(ga.logger, "cost_history", [])
 
+        if not math.isfinite(best.cost):
+            return {
+                "dataset": dataset_name, "run": run_num, "cost": None,
+                "elapsed": elapsed, "hitting_time": None, "nfe": nfe,
+                "cost_history": [], "error": f"infeasible: cost={best.cost}",
+            }
+
         return {
-            "dataset": dataset_name,
-            "run": run_num,
-            "cost": best.cost,
-            "elapsed": time.perf_counter() - start,
-            "hitting_time": hitting_time,
-            "nfe": nfe,
-            "cost_history": cost_history,
-            "error": None,
+            "dataset": dataset_name, "run": run_num, "cost": best.cost,
+            "elapsed": elapsed, "hitting_time": hitting_time, "nfe": nfe,
+            "cost_history": cost_history, "error": None,
         }
 
     except Exception as e:
         return {
-            "dataset": dataset_name,
-            "run": run_num,
-            "cost": None,
-            "elapsed": time.perf_counter() - start,
-            "hitting_time": None,
-            "nfe": 0,
-            "cost_history": [],
-            "error": str(e),
+            "dataset": dataset_name, "run": run_num, "cost": None,
+            "elapsed": time.perf_counter() - start, "hitting_time": None,
+            "nfe": 0, "cost_history": [], "error": str(e),
         }
 
 
