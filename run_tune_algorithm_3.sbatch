@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=gea_gqap_tune_algo_1
-#SBATCH --error=gea_gqap_tune_algo_1-%j.err
-#SBATCH --output=gea_gqap_tune_algo_1-%j.log
+#SBATCH --job-name=gea_gqap_tune_algo_3
+#SBATCH --error=gea_gqap_tune_algo_3-%j.err
+#SBATCH --output=gea_gqap_tune_algo_3-%j.log
 #SBATCH --partition=rocky
 #SBATCH --time=336:00:00
 #SBATCH --cpus-per-task=16
@@ -18,10 +18,8 @@ module load Python
 source activate gea_gqap_v2_env
 
 ALGORITHMS=(
-    standard
-    gea
-    adaptive
-    sa
+    hybrid_ga_sa
+    gea_scenario_1
 )
 
 for algo in "${ALGORITHMS[@]}"; do
