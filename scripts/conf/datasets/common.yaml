@@ -4,8 +4,8 @@
 # fast. Uncomment more (or all) of the lines below to run the full benchmark suite.
 names:
   - T1
-  - T3
   - T2
+  - T3
   - T4
   - T5
   - T6
@@ -17,13 +17,18 @@ names:
   - T12
   - T13
   - T14
+  - T15
   - c201535
   - c201555
   - c201575
   - c300695
   - c300775
+  - c300855
+  - c302035
   - c302055
   - c302075
   - c302095
   - c351535
+  - c351555
+  - c351575
   - c351595
