@@ -9,9 +9,9 @@ ga:
   _target_: src.algos.ga_gea_scenario_2.GEAScenario2
   population_size: 350
   iterations: 1000
-  crossover_rate: 0.7
-  mutation_rate: 0.3
-  dm_rate: 0.3
-  stagnation_limit: 30
-  immigrant_rate: 0.1
+  crossover_rate: 0.8969512890268935
+  mutation_rate: 0.5766510907020117
+  dm_rate: 0.1676793915565952
+  stagnation_limit: 10
+  immigrant_rate: 0.29829738093915237
   verbose: false

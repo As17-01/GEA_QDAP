@@ -9,11 +9,11 @@ ga:
   _target_: src.algos.ga_hybrid_gasa.HybridGASA
   population_size: 350
   iterations: 1000
-  crossover_rate: 0.7
-  mutation_rate: 0.3
-  initial_temperature: 50.0
-  cooling_rate: 0.97
-  min_temperature: 1e-3
-  stagnation_limit: 30
-  immigrant_rate: 0.1
+  crossover_rate: 0.8925006266090938
+  mutation_rate: 0.5983866545994556
+  initial_temperature: 198.8446513515677
+  cooling_rate: 0.9384704843359473
+  min_temperature: 0.009791972652820858
+  stagnation_limit: 34
+  immigrant_rate: 0.2344536876811455
   verbose: false
