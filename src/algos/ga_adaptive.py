@@ -3,7 +3,7 @@ import math
 from src.algos.base import BaseGA
 
 
-class AdaptiveGEA(BaseGA):
+class AdaptiveGA(BaseGA):
     def __init__(
         self,
         model,

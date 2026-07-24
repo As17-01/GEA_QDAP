@@ -4,7 +4,7 @@ Build a self-contained HTML results table from per-algorithm JSON files.
 
 Each algorithm run.py produces  results/<algo>.json  with this structure:
   [{"dataset": "T1", "results": {"AlgoClass": {mean, median, min, max, std}},
-    "runtime": {...}, "hitting_time": {...}, "errors": 0}, ...]
+    "runtime": {...}, "hitting_time": {...}, "nfe": {...}, "errors": 0}, ...]
 
 Usage:
     python scripts/build_results_table.py
@@ -33,7 +33,7 @@ ALGOS = [
     ("src.algos.ga_gea_scenario_3.GEAScenario3", "GEA-S3"),
     ("src.algos.ga_hybrid_gapso.HybridGAPSO", "GA+PSO"),
     ("src.algos.ga_hybrid_gasa.HybridGASA",   "GA+SA"),
-    ("src.algos.ga_adaptive.AdaptiveGEA",     "AdaptiveGEA"),
+    ("src.algos.ga_adaptive.AdaptiveGA",     "AdaptiveGA"),
 ]
 ALGO_ORDER = [algo_label(t) for t, _ in ALGOS]
 ALGO_DISPLAY = {algo_label(t): name for t, name in ALGOS}
@@ -119,11 +119,11 @@ def build_html(data: dict[str, dict[str, dict]], output: Path) -> None:
 
     # ---------- HTML generation ----------
     algo_headers = "".join(
-        f'<th colspan="3">{ALGO_DISPLAY.get(a, a)}</th>'
+        f'<th colspan="4">{ALGO_DISPLAY.get(a, a)}</th>'
         for a in present_algos
     )
     sub_headers = "".join(
-        "<th>Mean ± Std</th><th>Best</th><th>Hit(s)</th>"
+        "<th>Mean ± Std</th><th>Best</th><th>Hit(s)</th><th>NFE</th>"
         for _ in present_algos
     )
 
@@ -132,17 +132,19 @@ def build_html(data: dict[str, dict[str, dict]], output: Path) -> None:
         cells = f'<td class="ds-name">{ds}</td>'
         for algo in present_algos:
             if ds not in data[algo]:
-                cells += '<td colspan="3" class="missing">—</td>'
+                cells += '<td colspan="4" class="missing">—</td>'
                 continue
             rec = data[algo][ds]
             r   = _get_stats(rec, "results") or {}
             ht  = _get_stats(rec, "hitting_time") or {}
+            nfe = _get_stats(rec, "nfe") or {}
             errs = rec.get("errors", 0)
 
             mean_ = r.get("mean")
             std_  = r.get("std")
             min_  = r.get("min")
             hit_  = ht.get("mean")
+            nfe_  = nfe.get("mean")
 
             is_best_mean = mean_ is not None and abs(mean_ - best_mean[ds]) < 1e-3
             is_best_min  = min_  is not None and abs(min_  - best_min[ds])  < 1e-3
@@ -153,6 +155,7 @@ def build_html(data: dict[str, dict[str, dict]], output: Path) -> None:
             )
             min_str  = _fmt(min_) if min_ is not None else "—"
             hit_str  = _fmt(hit_, 1) if hit_ is not None else "—"
+            nfe_str  = _fmt(nfe_) if nfe_ is not None else "—"
 
             err_badge = f' <span class="err">({errs}✗)</span>' if errs else ""
 
@@ -160,6 +163,7 @@ def build_html(data: dict[str, dict[str, dict]], output: Path) -> None:
                 f'<td class="{"best" if is_best_mean else ""}">{mean_str}{err_badge}</td>'
                 f'<td class="{"best" if is_best_min else ""}">{min_str}</td>'
                 f'<td class="hit">{hit_str}</td>'
+                f'<td class="hit">{nfe_str}</td>'
             )
         rows_html += f"<tr>{cells}</tr>\n"
 
@@ -205,7 +209,7 @@ def build_html(data: dict[str, dict[str, dict]], output: Path) -> None:
 </head>
 <body>
 <h1>GQAP Algorithm Comparison</h1>
-<p class="sub">Mean ± Std and Best (Min) cost over all runs. Green = best value in row. Hit = avg wall-clock time (s) to first reach the best cost.</p>
+<p class="sub">Mean ± Std and Best (Min) cost over all runs. Green = best value in row. Hit = avg wall-clock time (s) to first reach the best cost. NFE = avg number of function evaluations.</p>
 <div class="wrap">
 <table>
 <thead>
@@ -220,7 +224,7 @@ def build_html(data: dict[str, dict[str, dict]], output: Path) -> None:
 </table>
 </div>
 <div class="legend">
-  <span class="b"></span> Best value in row &nbsp;|&nbsp; Hit(s) = avg hitting time &nbsp;|&nbsp; ✗ = failed runs
+  <span class="b"></span> Best value in row &nbsp;|&nbsp; Hit(s) = avg hitting time &nbsp;|&nbsp; NFE = avg function evaluations &nbsp;|&nbsp; ✗ = failed runs
 </div>
 </body>
 </html>

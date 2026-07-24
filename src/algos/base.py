@@ -52,7 +52,7 @@ class BaseGA(ABC):
         self.progress: float = 0.0
 
         # Stagnation-triggered random immigrants: a fixed mutation/crossover rate (or one
-        # that only ever shrinks, as in AdaptiveGEA) has no mechanism to react when the
+        # that only ever shrinks, as in AdaptiveGA) has no mechanism to react when the
         # population has actually converged on a local optimum -- this injects fresh random
         # individuals once `best_solution` has gone `stagnation_limit` iterations without
         # improving, giving crossover new material to recombine with.

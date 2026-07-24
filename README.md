@@ -46,7 +46,7 @@ src/
 │   ├── base.py            # BaseGA: shared init, selection, repair, local search, run loop
 │   ├── ga_standard.py     # StandardGA: textbook Holland (1992) baseline
 │   ├── ga_gea.py          # GEA: diversity selection, repair, immigrants, local search
-│   ├── ga_adaptive.py     # AdaptiveGEA: GEA + lambda-scaled, performance-adaptive rates
+│   ├── ga_adaptive.py     # AdaptiveGA: GEA + lambda-scaled, performance-adaptive rates
 │   ├── ga_sa.py           # SimulatedAnnealing: population of independent annealing chains
 │   ├── ga_pso.py          # ParticleSwarm: discrete PSO via crossover/mutation moves
 │   ├── ga_hybrid_gapso.py # HybridGAPSO: rank-split PSO refinement + GA regeneration
@@ -85,7 +85,7 @@ run_tune_components.sbatch # Slurm: runs scripts/tune_components.py (GEA only)
 ```python
 from src.data.model_loader import load_model
 from src.algos.ga_gea import GEA
-from src.algos.ga_adaptive import AdaptiveGEA
+from src.algos.ga_adaptive import AdaptiveGA
 from src.seeding import seed_all
 
 model = load_model("c201535")

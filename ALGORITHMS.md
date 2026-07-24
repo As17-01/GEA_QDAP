@@ -172,7 +172,7 @@ picks the next generation. Additional enhancements:
 
 ---
 
-## 3. `AdaptiveGEA` (`src/algos/ga_adaptive.py`)
+## 3. `AdaptiveGA` (`src/algos/ga_adaptive.py`)
 
 > **Scope note:** This algorithm is included in tuning and final experiment runs
 > alongside the rest of the algorithms, but its results **may not be reported** in this
@@ -428,7 +428,7 @@ poetry run python scripts/tune_algorithm.py --config-name="tune_algorithm/gea"
 | `HybridGASA` | `crossover_rate`, `mutation_rate`, `initial_temperature`, `cooling_rate` |
 | `GEAScenario1` | `crossover_rate`, `mutation_rate`, `rc_rate`, `stagnation_limit` |
 | `GEAScenario2` | `crossover_rate`, `mutation_rate`, `dm_rate`, `stagnation_limit` |
-| `AdaptiveGEA` | `crossover_rate`, `mutation_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit` |
+| `AdaptiveGA` | `crossover_rate`, `mutation_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit` |
 | `GEAScenario3` | `crossover_rate`, `mutation_rate`, `injection_rate`, `stagnation_limit` |
 
 ---
