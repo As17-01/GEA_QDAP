@@ -14,27 +14,29 @@ Usage:
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
 
-ALGO_ORDER = [
-    "standard", "sa", "pso", "gea",
-    "gea_scenario_1", "gea_scenario_2", "gea_scenario_3",
-    "hybrid_ga_pso", "hybrid_ga_sa", "adaptive",
+from utils.labels import algo_label
+
+# (ga._target_, display name) — stems match results/*.json via algo_label in conf/run/common.yaml
+ALGOS = [
+    ("src.algos.ga_standard.StandardGA",       "Standard GA"),
+    ("src.algos.ga_sa.SimulatedAnnealing",    "SA"),
+    ("src.algos.ga_pso.ParticleSwarm",        "PSO"),
+    ("src.algos.ga_gea.GEA",                  "GEA"),
+    ("src.algos.ga_gea_scenario_1.GEAScenario1", "GEA-S1"),
+    ("src.algos.ga_gea_scenario_2.GEAScenario2", "GEA-S2"),
+    ("src.algos.ga_gea_scenario_3.GEAScenario3", "GEA-S3"),
+    ("src.algos.ga_hybrid_gapso.HybridGAPSO", "GA+PSO"),
+    ("src.algos.ga_hybrid_gasa.HybridGASA",   "GA+SA"),
+    ("src.algos.ga_adaptive.AdaptiveGEA",     "AdaptiveGEA"),
 ]
-ALGO_DISPLAY = {
-    "standard":       "Standard GA",
-    "sa":             "SA",
-    "pso":            "PSO",
-    "gea":            "GEA",
-    "gea_scenario_1": "GEA-S1",
-    "gea_scenario_2": "GEA-S2",
-    "gea_scenario_3": "GEA-S3",
-    "hybrid_ga_pso":  "GA+PSO",
-    "hybrid_ga_sa":   "GA+SA",
-    "adaptive":       "AdaptiveGEA",
-}
+ALGO_ORDER = [algo_label(t) for t, _ in ALGOS]
+ALGO_DISPLAY = {algo_label(t): name for t, name in ALGOS}
 
 DATASET_ORDER = [
     "T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12","T13","T14",

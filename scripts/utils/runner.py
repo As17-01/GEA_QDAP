@@ -28,12 +28,12 @@ from omegaconf import OmegaConf
 
 from src.data.model_loader import load_model
 from src.seeding import seed_all
+from utils.labels import algo_label
 
-# Lets conf/run/common.yaml derive output_file from ga._target_ (e.g.
-# "...ga_adaptive.AdaptiveGEA" -> "adaptive") instead of each config repeating its own output
-# filename. Registered here (imported by every entry-point script before its @hydra.main
-# composes a config) rather than in each script, so it's done exactly once.
-OmegaConf.register_new_resolver("algo_label", lambda target: target.rsplit(".", 1)[-1].removesuffix("GA").lower(), replace=True)
+# Lets conf/run/common.yaml derive output_file from ga._target_ via algo_label instead of
+# each config repeating its own output filename. Registered here (imported by every
+# entry-point script before its @hydra.main composes a config) rather than in each script.
+OmegaConf.register_new_resolver("algo_label", algo_label, replace=True)
 
 
 def timestamp() -> str:
