@@ -38,11 +38,17 @@ ALGOS = [
 ALGO_ORDER = [algo_label(t) for t, _ in ALGOS]
 ALGO_DISPLAY = {algo_label(t): name for t, name in ALGOS}
 
-DATASET_ORDER = [
-    "T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12","T13","T14",
-    "c201535","c201555","c201575","c300695","c300775",
-    "c302055","c302075","c302095","c351535","c351595",
-]
+DATASET_CONFIG = SCRIPT_DIR / "conf" / "datasets" / "common.yaml"
+
+
+def load_dataset_order() -> list[str]:
+    """Canonical dataset order from conf/datasets/common.yaml."""
+    names: list[str] = []
+    for line in DATASET_CONFIG.read_text().splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            names.append(stripped[2:])
+    return names
 
 # Datasets that have a known optimal (for OG computation)
 KNOWN_OPTIMAL: dict[str, float] = {
@@ -89,8 +95,10 @@ def _get_stats(record: dict, key: str) -> dict | None:
 def build_html(data: dict[str, dict[str, dict]], output: Path) -> None:
     # Determine which algos and datasets are actually present
     present_algos = [a for a in ALGO_ORDER if a in data]
-    present_datasets = [d for d in DATASET_ORDER
-                        if any(d in data[a] for a in present_algos)]
+    dataset_order = load_dataset_order()
+    in_data = {ds for a in present_algos for ds in data[a]}
+    present_datasets = [d for d in dataset_order if d in in_data]
+    present_datasets += sorted(in_data - set(dataset_order))
 
     # ---------- pre-compute best-mean and best-min per dataset ----------
     best_mean: dict[str, float] = {}
