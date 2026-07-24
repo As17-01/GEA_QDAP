@@ -185,6 +185,7 @@ def build_html(data: dict[str, dict[str, dict]], output: Path) -> None:
   tr:nth-child(even) td {{ background: var(--stripe); }}
   tr:nth-child(even) td.ds-name {{ background: var(--stripe); }}
   td.best {{ background: var(--best-bg); color: var(--best-fg); font-weight: 700; }}
+  tr:nth-child(even) td.best {{ background: var(--best-bg); }}
   td.hit  {{ color: var(--hit-fg); font-size: 0.9em; }}
   td.missing {{ color: var(--miss-fg); text-align: center; }}
   .err  {{ color: var(--err-fg); font-size: 0.8em; }}
