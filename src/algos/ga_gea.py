@@ -65,9 +65,9 @@ class GEA(BaseGA):
 
         offspring = [child for child, _ in self.crossover(probs, ncrossover)]    # stage 1
         mutations = [child for child, _ in self.mutate(nmutation)]               # stage 2
-        rc_offspring = self._robust_chromosome_crossover(probs, n_rc)            # stage 3
-        dm_mutations = self._directed_mutation(n_dm)                             # stage 4
-        gi_injections = self._gene_injection(n_gi)                               # stage 5
+        rc_offspring = [child for child, _ in self._robust_chromosome_crossover(probs, n_rc)]            # stage 3
+        dm_mutations = [child for child, _ in self._directed_mutation(n_dm)]                             # stage 4
+        gi_injections = [child for child, _ in self._gene_injection(n_gi)]                               # stage 5
         immigrants = self.maybe_generate_immigrants()
 
         pool = self.population + offspring + mutations + rc_offspring + dm_mutations + gi_injections + immigrants

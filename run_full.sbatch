@@ -20,7 +20,9 @@ source activate gea_gqap_v2_env
 ALGORITHMS=(
     standard
     gea
+    improved_ga
     adaptive
+    adaptive_gea
     sa
     pso
     hybrid_ga_pso
@@ -28,6 +30,9 @@ ALGORITHMS=(
     gea_scenario_1
     gea_scenario_2
     gea_scenario_3
+    adaptive_gea_scenario_1
+    adaptive_gea_scenario_2
+    adaptive_gea_scenario_3
 )
 
 for algo in "${ALGORITHMS[@]}"; do

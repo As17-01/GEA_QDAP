@@ -55,7 +55,7 @@ class GEAScenario2(BaseGA):
 
         offspring = [child for child, _ in self.crossover(probs, ncrossover)]
         mutations = [child for child, _ in self.mutate(nmutation)]
-        dm_mutations = self._directed_mutation(n_dm)
+        dm_mutations = [child for child, _ in self._directed_mutation(n_dm)]
         immigrants = self.maybe_generate_immigrants()
 
         pool = self.population + offspring + mutations + dm_mutations + immigrants

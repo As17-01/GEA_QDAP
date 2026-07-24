@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+  - /adaptive_gea
+  - _self_
+
+tune:
+  runs: 30
+  n_candidates: 30
+  seed: 0
+  ga_path: conf/adaptive_gea.yaml
+  output_file: results/tune_algorithm_adaptive_gea_${now:%Y%m%d_%H%M%S}.json
+  param_space:
+    crossover_rate: [0.4, 0.9]
+    mutation_rate: [0.1, 0.6]
+    rc_rate: [0.1, 0.5]
+    dm_rate: [0.1, 0.5]
+    injection_rate: [0.05, 0.3]
+    alpha: [0.001, 0.05]
+    lambda_min: [0.2, 0.6]
+    lambda_max: [1.2, 2.0]
+    stagnation_limit: [10, 60]
+    immigrant_rate: [0.02, 0.3]

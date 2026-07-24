@@ -224,10 +224,13 @@ class BaseGA(ABC):
             self.logger.record_nfe(nfe)
             return perm
 
-    def _robust_chromosome_crossover(self, probabilities: np.ndarray, n: int) -> List[Individual]:
+    def _robust_chromosome_crossover(
+        self, probabilities: np.ndarray, n: int
+    ) -> List[Tuple[Individual, Individual]]:
         """RC (Robust Chromosome) crossover driver: per gene, inherit from the parent with
         more remaining capacity slack. Used by GEA and GEAScenario1."""
-        offspring = []
+        offspring: List[Individual] = []
+        baselines_out: List[Individual] = []
         valid = 0
         new_best = 0
 
@@ -249,6 +252,7 @@ class BaseGA(ABC):
 
                 repaired = self.repair_batch_wrapper(np.array(raw_perms))
                 offspring = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                baselines_out = baselines
                 self.logger.record_nfe(len(raw_perms))
 
                 for child in offspring:
@@ -258,12 +262,13 @@ class BaseGA(ABC):
                             new_best += 1
 
         self.logger.record_crossover(n, valid, new_best)
-        return offspring
+        return list(zip(offspring, baselines_out))
 
-    def _directed_mutation(self, n: int) -> List[Individual]:
+    def _directed_mutation(self, n: int) -> List[Tuple[Individual, Individual]]:
         """DM (Directed Mutation) driver: moves each individual's worst-assigned job to its
         cheapest feasible facility. Used by GEA and GEAScenario2."""
-        mutations = []
+        mutations: List[Individual] = []
+        baselines_out: List[Individual] = []
         valid = 0
         new_best = 0
 
@@ -275,6 +280,7 @@ class BaseGA(ABC):
                 raw_perms = np.array([mutation_greedy_reassign(b.permutation, self.model) for b in baselines])
                 repaired = self.repair_batch_wrapper(raw_perms)
                 mutations = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                baselines_out = baselines
                 self.logger.record_nfe(n)
 
                 for child in mutations:
@@ -284,12 +290,13 @@ class BaseGA(ABC):
                             new_best += 1
 
         self.logger.record_mutation(n, valid, new_best)
-        return mutations
+        return list(zip(mutations, baselines_out))
 
-    def _gene_injection(self, n: int) -> List[Individual]:
+    def _gene_injection(self, n: int) -> List[Tuple[Individual, Individual]]:
         """GI (Gene Injection) driver: replaces a handful of random genes with new random
         facility assignments. Used by GEA and GEAScenario3."""
-        injected = []
+        injected: List[Individual] = []
+        baselines_out: List[Individual] = []
         valid = 0
         new_best = 0
 
@@ -301,6 +308,7 @@ class BaseGA(ABC):
                 raw_perms = np.array([mutation_random(b.permutation, self.model) for b in baselines])
                 repaired = self.repair_batch_wrapper(raw_perms)
                 injected = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+                baselines_out = baselines
                 self.logger.record_nfe(n)
 
                 for child in injected:
@@ -310,7 +318,7 @@ class BaseGA(ABC):
                             new_best += 1
 
         self.logger.record_mutation(n, valid, new_best)
-        return injected
+        return list(zip(injected, baselines_out))
 
     def polish_elites(self) -> None:
         if self.model.J > LOCAL_SEARCH_MAX_J:

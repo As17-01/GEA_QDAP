@@ -55,7 +55,7 @@ class GEAScenario1(BaseGA):
 
         offspring = [child for child, _ in self.crossover(probs, ncrossover)]
         mutations = [child for child, _ in self.mutate(nmutation)]
-        rc_offspring = self._robust_chromosome_crossover(probs, n_rc)
+        rc_offspring = [child for child, _ in self._robust_chromosome_crossover(probs, n_rc)]
         immigrants = self.maybe_generate_immigrants()
 
         pool = self.population + offspring + mutations + rc_offspring + immigrants

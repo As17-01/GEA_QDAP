@@ -55,7 +55,7 @@ class GEAScenario3(BaseGA):
 
         offspring = [child for child, _ in self.crossover(probs, ncrossover)]
         mutations = [child for child, _ in self.mutate(nmutation)]
-        injected = self._gene_injection(n_gi)
+        injected = [child for child, _ in self._gene_injection(n_gi)]
         immigrants = self.maybe_generate_immigrants()
 
         pool = self.population + offspring + mutations + injected + immigrants

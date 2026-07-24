@@ -1,7 +1,7 @@
 # Algorithms
 
 This project solves the Generalized Quadratic Assignment Problem (GQAP, see
-[PROBLEM_DESCRIPTION.md](PROBLEM_DESCRIPTION.md)) with ten metaheuristics, all sharing
+[PROBLEM_DESCRIPTION.md](PROBLEM_DESCRIPTION.md)) with fifteen metaheuristics, all sharing
 the same solution representation, problem instance format, and a common scaffolding
 class (`BaseGA`). This document describes that shared scaffolding first, then each
 algorithm built on top of it, then the tuning and experimental procedures.
@@ -162,39 +162,71 @@ picks the next generation. Additional enhancements:
   iterations, `immigrant_rate · population_size` fresh random individuals are injected.
 - **Memetic local search**: enabled.
 
-> **Design notes:** `GEAScenario1`, `GEAScenario2`, and `GEAScenario3` are
-> **single-enhancement ablations** of this full variant — each adds only one of stages
-> 3, 4, or 5 on top of standard crossover + mutation, without the other two. The RC
-> crossover helper (`crossover_robust_chromosome`) is implemented once in
-> `src/operators/crossover.py`; the RC, DM, and GI driver methods live on `BaseGA`
-> (`_robust_chromosome_crossover`, `_directed_mutation`, `_gene_injection`) so all
-> subclasses that need them (GEA, Scenario1/2/3) inherit rather than duplicate them.
+> **Design notes:** `ImprovedGA` is the GEA-family baseline with only stages 1–2 (no RC/DM/GI).
+> `GEAScenario1`, `GEAScenario2`, and `GEAScenario3` are **single-enhancement ablations**
+> of the full `GEA` variant — each adds only one of stages 3, 4, or 5 on top of standard
+> crossover + mutation, without the other two. The RC crossover helper
+> (`crossover_robust_chromosome`) is implemented once in `src/operators/crossover.py`; the
+> RC, DM, and GI driver methods live on `BaseGA` (`_robust_chromosome_crossover`,
+> `_directed_mutation`, `_gene_injection`) so all subclasses that need them (GEA,
+> Scenario1/2/3, AdaptiveGEA, AdaptiveGEAScenario1/2/3) inherit rather than duplicate them.
 
 ---
 
-## 3. `AdaptiveGA` (`src/algos/ga_adaptive.py`)
+## 3. `ImprovedGA` (`src/algos/ga_improved_ga.py`)
+
+The GEA-family baseline **without** any scenario operators (RC, DM, or GI). Each generation
+runs only:
+
+1. **Regular crossover** (`choose_crossover`, all 4 operators) at `crossover_rate`.
+2. **Regular mutation** (`choose_mutation`, all 9 operators) at `mutation_rate`.
+
+All other GEA-family machinery is retained: `DiversitySelector`, `RFRepair`, stagnation
+immigrants, and memetic local search. This isolates the contribution of the shared GEA
+scaffolding from the three scenario-specific operator stages in `GEA`.
+
+Hydra config: `scripts/conf/improved_ga.yaml` → results file `improved.json`.
+
+---
+
+## 4. `AdaptiveGA` (`src/algos/ga_adaptive.py`)
 
 > **Scope note:** This algorithm is included in tuning and final experiment runs
 > alongside the rest of the algorithms, but its results **may not be reported** in this
 > paper. It will be formally proposed in a follow-up project with a new cost function.
 
-Identical to `GEA` except the crossover and mutation rates adapt every generation
-based on how much improvement each operator produced. Each operator's rate is scaled by
-a lambda multiplier (`lambda_crossover`, `lambda_mutation`, both starting at `1.0`):
+Same GEA-family infrastructure as `ImprovedGA` (diversity selection, `RFRepair`,
+stagnation immigrants, memetic local search). Crossover and mutation counts adapt every
+generation (see **Adaptive rate mechanism** below). Scenario operators (RC/DM/GI) are
+not used.
 
-1. Each offspring's improvement over its **own parent baseline** is normalized:
-   `delta = (parent_cost - child_cost) / (parent_cost + epsilon)`, accumulated per
-   operator. Comparing to the parent (not the global best) prevents lambda from
-   collapsing toward `lambda_min` once the population converges.
-2. `lambda_new = clip(lambda_old + alpha · delta_sum, lambda_min, lambda_max)`.
-3. Next generation's operator counts become `base_rate · population_size · lambda`.
+### Adaptive rate mechanism
+
+Each operator present in an adaptive algorithm maintains its own lambda multiplier
+(starting at `1.0`). Every generation:
+
+1. Operator count: `n = base_rate · population_size · lambda`.
+2. Each offspring's improvement over its **own parent baseline** is accumulated:
+   `delta = (parent_cost - child_cost) / (parent_cost + epsilon)`.
+3. `lambda_new = clip(lambda_old + alpha · delta_sum, lambda_min, lambda_max)`.
+
+Comparing to the parent baseline (not the global best) prevents lambda from collapsing
+toward `lambda_min` once the population converges. Shared logic lives in
+`src/algos/adaptive_mixin.py` (`AdaptiveRatesMixin`).
+
+| Algorithm | Adaptive operators |
+|---|---|
+| `AdaptiveGA` | crossover, mutation |
+| `AdaptiveGEA` | crossover, mutation, RC, DM, GI |
+| `AdaptiveGEAScenario1` | crossover, mutation, RC |
+| `AdaptiveGEAScenario2` | crossover, mutation, DM |
+| `AdaptiveGEAScenario3` | crossover, mutation, GI |
+
+Stagnation immigrants remain at fixed `immigrant_rate`.
 
 ---
 
-## 4. `SimulatedAnnealing` (`src/algos/ga_sa.py`)
-
-> Bertsimas, D., & Tsitsiklis, J. (1993). Simulated annealing. *Statistical Science*,
-> 8(1), 10–15.
+## 5. `SimulatedAnnealing` (`src/algos/ga_sa.py`)
 
 Classic **single-solution** SA. Population size is forced to `1` — population-based SA
 is not acceptable in the literature; the algorithm starts from one initial solution and
@@ -214,7 +246,7 @@ no immigrants.
 
 ---
 
-## 5. `ParticleSwarm` (`src/algos/ga_pso.py`)
+## 6. `ParticleSwarm` (`src/algos/ga_pso.py`)
 
 > Kennedy, J., & Eberhart, R. (1995, November). Particle swarm optimization.
 > *Proceedings of ICNN'95* (Vol. 4, pp. 1942–1948).
@@ -254,7 +286,7 @@ maintained separately from `self.population`'s ordering, since `BaseGA.run()` re
 
 ---
 
-## 6. `HybridGAPSO` (`src/algos/ga_hybrid_gapso.py`)
+## 7. `HybridGAPSO` (`src/algos/ga_hybrid_gapso.py`)
 
 > Juang, C. F. (2004). A hybrid of genetic algorithm and particle swarm optimization
 > for recurrent network design. *IEEE Transactions on Systems, Man, and Cybernetics,
@@ -276,7 +308,7 @@ the next generation, as in the original paper.
 
 ---
 
-## 7. `HybridGASA` (`src/algos/ga_hybrid_gasa.py`)
+## 8. `HybridGASA` (`src/algos/ga_hybrid_gasa.py`)
 
 > Chen, P. H., & Shahandashti, S. M. (2009). Hybrid of genetic algorithm and simulated
 > annealing for multiple project scheduling with multiple resource constraints.
@@ -301,7 +333,7 @@ plain elitist GA.
 
 ---
 
-## 8. `GEAScenario1` — Crossover with Robust Chromosome (`src/algos/ga_gea_scenario_1.py`)
+## 9. `GEAScenario1` — Crossover with Robust Chromosome (`src/algos/ga_gea_scenario_1.py`)
 
 Modernization of `GEA` — Scenario 1: **RC (Robust Chromosome) crossover**.
 
@@ -316,14 +348,14 @@ Runs three operators each generation at **fixed rates** — no adaptive lambda:
 All three sets of offspring are pooled with the current population; `DiversitySelector`
 picks the next generation.
 
-> **Design notes:** Adaptive lambda control (`lambda_rc`, `alpha`, `epsilon`) has been
-> removed from this scenario. The adaptive version is out of scope for this paper and
-> will be proposed separately. All crossover and mutation operators are identical to
-> those used in the base GEA and StandardGA.
+> **Design notes:** The fixed-rate version is reported in this paper. The adaptive
+> counterpart (`AdaptiveGEAScenario1`, §13) is tuned and run alongside the rest but may
+> be reported separately. All crossover and mutation operators are identical to those used
+> in the base GEA and StandardGA.
 
 ---
 
-## 9. `GEAScenario2` — Directed Mutation (`src/algos/ga_gea_scenario_2.py`)
+## 10. `GEAScenario2` — Directed Mutation (`src/algos/ga_gea_scenario_2.py`)
 
 Modernization of `GEA` — Scenario 2: **DM (Directed Mutation)**.
 
@@ -335,12 +367,13 @@ Runs three operators each generation at **fixed rates** — no adaptive lambda:
    single worst-assigned job to its cheapest feasible facility — a directed,
    fitness-improving move rather than a blind random one.
 
-> **Design notes:** As with Scenario 1, adaptive lambda control has been removed.
-> Crossover and mutation operator sets are identical to the rest of the family.
+> **Design notes:** As with Scenario 1, the fixed-rate version is reported here; the
+> adaptive counterpart is `AdaptiveGEAScenario2` (§14). Crossover and mutation operator
+> sets are identical to the rest of the family.
 
 ---
 
-## 10. `GEAScenario3` — Gene Injection (`src/algos/ga_gea_scenario_3.py`)
+## 11. `GEAScenario3` — Gene Injection (`src/algos/ga_gea_scenario_3.py`)
 
 Modernization of `GEA` — Scenario 3: **GI (Gene Injection)**.
 
@@ -352,8 +385,44 @@ Runs three operators each generation at **fixed rates** — no adaptive lambda:
    with brand-new random facility assignments, injecting fresh genetic material rather
    than perturbing the existing assignment.
 
-> **Design notes:** As with Scenarios 1 and 2, adaptive lambda control has been
-> removed. Crossover and mutation operator sets are identical to the rest of the family.
+> **Design notes:** As with Scenarios 1 and 2, the fixed-rate version is reported here;
+> the adaptive counterpart is `AdaptiveGEAScenario3` (§15). Crossover and mutation
+> operator sets are identical to the rest of the family.
+
+---
+
+## 12. `AdaptiveGEA` (`src/algos/ga_adaptive_gea.py`)
+
+Full `GEA` (all five operator stages) with **lambda-adaptive rates on every stage**
+(crossover, mutation, RC, DM, GI) — see §4 adaptive rate mechanism. Config still
+exposes base rates as `crossover_rate`, `mutation_rate`, `rc_rate`, `dm_rate`, and
+`injection_rate`; each is scaled by its own lambda each generation.
+
+Hydra config: `scripts/conf/adaptive_gea.yaml` → results file `adaptivegea.json`.
+
+---
+
+## 13. `AdaptiveGEAScenario1` (`src/algos/ga_adaptive_gea_scenario_1.py`)
+
+`GEAScenario1` with adaptive crossover, mutation, and RC rates.
+
+Hydra config: `scripts/conf/adaptive_gea_scenario_1.yaml`.
+
+---
+
+## 14. `AdaptiveGEAScenario2` (`src/algos/ga_adaptive_gea_scenario_2.py`)
+
+`GEAScenario2` with adaptive crossover, mutation, and DM rates.
+
+Hydra config: `scripts/conf/adaptive_gea_scenario_2.yaml`.
+
+---
+
+## 15. `AdaptiveGEAScenario3` (`src/algos/ga_adaptive_gea_scenario_3.py`)
+
+`GEAScenario3` with adaptive crossover, mutation, and GI rates.
+
+Hydra config: `scripts/conf/adaptive_gea_scenario_3.yaml`.
 
 ---
 
@@ -422,14 +491,19 @@ poetry run python scripts/tune_algorithm.py --config-name="tune_algorithm/gea"
 |---|---|
 | `StandardGA` | `crossover_rate`, `mutation_rate`, `elitism_count` |
 | `GEA` | `crossover_rate`, `mutation_rate`, `rc_rate`, `dm_rate`, `injection_rate`, `stagnation_limit`, `immigrant_rate` |
+| `ImprovedGA` | `crossover_rate`, `mutation_rate`, `stagnation_limit`, `immigrant_rate` |
+| `AdaptiveGA` | `crossover_rate`, `mutation_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
+| `AdaptiveGEA` | `crossover_rate`, `mutation_rate`, `rc_rate`, `dm_rate`, `injection_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
 | `SA` | `initial_temperature`, `cooling_rate`, `min_temperature` |
 | `PSO` | `inertia_weight`, `cognitive_weight`, `social_weight`, `stagnation_limit` |
 | `HybridGAPSO` | `pso_fraction`, `inertia_weight`, `cognitive_weight`, `social_weight`, `crossover_rate`, `mutation_rate` |
 | `HybridGASA` | `crossover_rate`, `mutation_rate`, `initial_temperature`, `cooling_rate` |
-| `GEAScenario1` | `crossover_rate`, `mutation_rate`, `rc_rate`, `stagnation_limit` |
-| `GEAScenario2` | `crossover_rate`, `mutation_rate`, `dm_rate`, `stagnation_limit` |
-| `AdaptiveGA` | `crossover_rate`, `mutation_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit` |
-| `GEAScenario3` | `crossover_rate`, `mutation_rate`, `injection_rate`, `stagnation_limit` |
+| `GEAScenario1` | `crossover_rate`, `mutation_rate`, `rc_rate`, `stagnation_limit`, `immigrant_rate` |
+| `GEAScenario2` | `crossover_rate`, `mutation_rate`, `dm_rate`, `stagnation_limit`, `immigrant_rate` |
+| `GEAScenario3` | `crossover_rate`, `mutation_rate`, `injection_rate`, `stagnation_limit`, `immigrant_rate` |
+| `AdaptiveGEAScenario1` | `crossover_rate`, `mutation_rate`, `rc_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
+| `AdaptiveGEAScenario2` | `crossover_rate`, `mutation_rate`, `dm_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
+| `AdaptiveGEAScenario3` | `crossover_rate`, `mutation_rate`, `injection_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
 
 ---
 
