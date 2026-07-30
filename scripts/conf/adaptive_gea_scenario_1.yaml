@@ -9,13 +9,13 @@ ga:
   _target_: src.algos.ga_adaptive_gea_scenario_1.AdaptiveGEAScenario1
   population_size: 350
   iterations: 1000
-  crossover_rate: 0.6254706108973966
-  mutation_rate: 0.5173991834198135
-  rc_rate: 0.533133892897716
-  alpha: 0.009801927028492408
-  lambda_min: 0.5801553721241383
-  lambda_max: 1.6692365117099865
+  crossover_rate: 0.7792025678325523
+  mutation_rate: 0.587135462861959
+  rc_rate: 0.5756888179314985
+  alpha: 0.038424719387308355
+  lambda_min: 0.5895881759974847
+  lambda_max: 1.8667379161527589
   epsilon: 1e-5
-  stagnation_limit: 28
-  immigrant_rate: 0.09545205362916453
+  stagnation_limit: 11
+  immigrant_rate: 0.14334472200479442
   verbose: false
