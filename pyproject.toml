@@ -51,6 +51,9 @@ line_length = 120
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.0"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
