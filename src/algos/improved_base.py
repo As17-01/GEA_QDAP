@@ -333,3 +333,30 @@ class ImprovedBase(AlgorithmBase):
             return
 
         self.run_gea_generation(crossover_rate, mutation_rate)
+
+    def run_adaptive_generation(
+        self,
+        *,
+        rc_rate: float = 0.0,
+        dm_rate: float = 0.0,
+        injection_rate: float = 0.0,
+    ) -> None:
+        """One improved-family adaptive generation with lambda-scaled operator counts."""
+        probs = self.compute_selection_probabilities()
+        offspring, mutations = self._adaptive_crossover_and_mutation(
+            lambda n: self.crossover(probs, n),
+            lambda n: self.mutate(n),
+        )
+
+        pool = self.population + offspring + mutations
+        if rc_rate > 0:
+            pool += self._adaptive_robust_chromosome_crossover(
+                lambda n: self._robust_chromosome_crossover(probs, n)
+            )
+        if dm_rate > 0:
+            pool += self._adaptive_directed_mutation(lambda n: self._directed_mutation(n))
+        if injection_rate > 0:
+            pool += self._adaptive_gene_injection(lambda n: self._gene_injection(n))
+
+        pool += self.maybe_generate_immigrants()
+        self.select_from_pool(pool)

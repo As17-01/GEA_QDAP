@@ -5,8 +5,11 @@ defaults:
   - hydra: common
   - _self_
 
+run:
+  output_file: results/adaptive_gea_scenario_3.json
+
 ga:
-  _target_: src.algos.ga_adaptive_gea_scenario_3.AdaptiveGEAScenario3
+  _target_: src.algos.adaptive_gea_scenario.ImprovedAdaptiveGEAScenario3
   population_size: 350
   iterations: 1000
   crossover_rate: 0.7119312779954151

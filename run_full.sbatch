@@ -23,6 +23,7 @@ ALGORITHMS=(
     standard_gea
     improved_ga
     adaptive
+    standard_adaptive
     sa
     pso
     hybrid_ga_pso
@@ -34,9 +35,13 @@ ALGORITHMS=(
     gea_scenario_3
     standard_gea_scenario_3
     adaptive_gea
+    standard_adaptive_gea
     adaptive_gea_scenario_1
+    standard_adaptive_gea_scenario_1
     adaptive_gea_scenario_2
+    standard_adaptive_gea_scenario_2
     adaptive_gea_scenario_3
+    standard_adaptive_gea_scenario_3
 )
 
 for algo in "${ALGORITHMS[@]}"; do

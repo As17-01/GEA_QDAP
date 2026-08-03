@@ -50,6 +50,137 @@ class StandardBase(AlgorithmBase):
                 offspring[slot] = elite
         self.population = offspring
 
+    def _standard_crossover_batch(self, n: int) -> list[tuple[Individual, Individual]]:
+        n = n - (n % 2)
+        num_pairs = n // 2
+        if not num_pairs:
+            return []
+
+        parent_idx = self._fitness_parent_indices(2 * num_pairs)
+        raw_perms = []
+        baselines = []
+        for k in range(num_pairs):
+            i1, i2 = parent_idx[2 * k], parent_idx[2 * k + 1]
+            p1, p2 = self.population[i1], self.population[i2]
+            (child1, base1), (child2, base2) = choose_crossover((p1, p2), self.model)
+            raw_perms.extend((child1, child2))
+            baselines.extend((base1, base2))
+
+        repaired = self.repair_batch_wrapper(np.array(raw_perms))
+        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+        self.logger.record_nfe(len(raw_perms))
+        return list(zip(children, baselines))
+
+    def _standard_mutate_batch(self, n: int) -> list[tuple[Individual, Individual]]:
+        if n <= 0:
+            return []
+
+        indices = np.random.randint(0, len(self.population), size=n)
+        baselines = [self.population[idx] for idx in indices]
+        raw_perms = np.array([choose_mutation(b.permutation, self.model) for b in baselines])
+        repaired = self.repair_batch_wrapper(raw_perms)
+        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+        self.logger.record_nfe(n)
+        return list(zip(children, baselines))
+
+    def _standard_rc_crossover_batch(self, n: int) -> list[tuple[Individual, Individual]]:
+        n = n - (n % 2)
+        num_pairs = n // 2
+        if not num_pairs:
+            return []
+
+        parent_idx = self._fitness_parent_indices(2 * num_pairs)
+        raw_perms = []
+        baselines = []
+        for k in range(num_pairs):
+            i1, i2 = parent_idx[2 * k], parent_idx[2 * k + 1]
+            p1, p2 = self.population[i1], self.population[i2]
+            (child1, base1), (child2, base2) = crossover_robust_chromosome(p1, p2, self.model)
+            raw_perms.extend((child1, child2))
+            baselines.extend((base1, base2))
+
+        repaired = self.repair_batch_wrapper(np.array(raw_perms))
+        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+        self.logger.record_nfe(len(raw_perms))
+        return list(zip(children, baselines))
+
+    def _standard_directed_mutation_batch(self, n: int) -> list[tuple[Individual, Individual]]:
+        if n <= 0:
+            return []
+
+        indices = np.random.randint(0, len(self.population), size=n)
+        baselines = [self.population[idx] for idx in indices]
+        raw_perms = np.array([mutation_greedy_reassign(b.permutation, self.model) for b in baselines])
+        repaired = self.repair_batch_wrapper(raw_perms)
+        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+        self.logger.record_nfe(n)
+        return list(zip(children, baselines))
+
+    def _standard_gene_injection_batch(self, n: int) -> list[tuple[Individual, Individual]]:
+        if n <= 0:
+            return []
+
+        indices = np.random.randint(0, len(self.population), size=n)
+        baselines = [self.population[idx] for idx in indices]
+        raw_perms = np.array([mutation_random(b.permutation, self.model) for b in baselines])
+        repaired = self.repair_batch_wrapper(raw_perms)
+        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+        self.logger.record_nfe(n)
+        return list(zip(children, baselines))
+
+    def _standard_offspring_fill(self, count: int) -> list[Individual]:
+        if count <= 0:
+            return []
+
+        num_pairs = count // 2 + count % 2
+        parent_idx = self._fitness_parent_indices(2 * num_pairs)
+        raw_perms = []
+        baselines = []
+        for k in range(num_pairs):
+            i1, i2 = parent_idx[2 * k], parent_idx[2 * k + 1]
+            p1, p2 = self.population[i1], self.population[i2]
+            (child1, base1), (child2, base2) = choose_crossover((p1, p2), self.model)
+            child1 = choose_mutation(child1, self.model)
+            child2 = choose_mutation(child2, self.model)
+            raw_perms.extend((child1, child2))
+            baselines.extend((base1, base2))
+
+        raw_perms = raw_perms[:count]
+        baselines = baselines[:count]
+        repaired = self.repair_batch_wrapper(np.array(raw_perms))
+        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
+        self.logger.record_nfe(len(raw_perms))
+        return list(children)
+
+    def _finalize_adaptive_offspring(self, candidates: list[Individual], elitism_count: int) -> None:
+        n = self.population_size
+        if len(candidates) < n:
+            candidates = candidates + self._standard_offspring_fill(n - len(candidates))
+        offspring = sorted(candidates, key=lambda x: x.cost)[:n]
+        self._replace_with_elitism(offspring, elitism_count)
+
+    def run_adaptive_generational(
+        self,
+        elitism_count: int,
+        *,
+        rc_rate: float = 0.0,
+        dm_rate: float = 0.0,
+        injection_rate: float = 0.0,
+    ) -> None:
+        """One standard-family adaptive generation with lambda-scaled operator counts."""
+        offspring = self._adaptive_apply("base_crossover", "lambda_crossover", self._standard_crossover_batch)
+        mutations = self._adaptive_apply("base_mutation", "lambda_mutation", self._standard_mutate_batch)
+        candidates = offspring + mutations
+
+        if rc_rate > 0:
+            candidates += self._adaptive_apply("base_rc", "lambda_rc", self._standard_rc_crossover_batch)
+        if dm_rate > 0:
+            candidates += self._adaptive_apply("base_dm", "lambda_dm", self._standard_directed_mutation_batch)
+        if injection_rate > 0:
+            candidates += self._adaptive_apply("base_gi", "lambda_gi", self._standard_gene_injection_batch)
+
+        self._finalize_adaptive_offspring(candidates, elitism_count)
+
     def run_gea_generational(
         self,
         crossover_rate: float,

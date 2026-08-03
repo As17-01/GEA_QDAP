@@ -1,15 +1,14 @@
 defaults:
   - datasets: common
-  - components@ga: common
   - run: common
   - hydra: common
   - _self_
 
 run:
-  output_file: results/adaptive_gea_scenario_2.json
+  output_file: results/standard_adaptive_gea_scenario_2.json
 
 ga:
-  _target_: src.algos.adaptive_gea_scenario.ImprovedAdaptiveGEAScenario2
+  _target_: src.algos.adaptive_gea_scenario.StandardAdaptiveGEAScenario2
   population_size: 350
   iterations: 1000
   crossover_rate: 0.8969512890268935
@@ -19,6 +18,5 @@ ga:
   lambda_min: 0.5801553721241383
   lambda_max: 1.6692365117099865
   epsilon: 1e-5
-  stagnation_limit: 10
-  immigrant_rate: 0.29829738093915237
+  elitism_count: 5
   verbose: false

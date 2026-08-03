@@ -5,8 +5,11 @@ defaults:
   - hydra: common
   - _self_
 
+run:
+  output_file: results/adaptive.json
+
 ga:
-  _target_: src.algos.ga_adaptive.AdaptiveGA
+  _target_: src.algos.adaptive.ImprovedAdaptiveGA
   population_size: 350
   iterations: 1000
   crossover_rate: 0.8708708889922567

@@ -36,13 +36,18 @@ ALGOS = [
     ("src.algos.gea_scenario.StandardGEAScenario2",       "Standard GEA-S2"),
     ("src.algos.gea_scenario.ImprovedGEAScenario3",       "GEA-S3"),
     ("src.algos.gea_scenario.StandardGEAScenario3",       "Standard GEA-S3"),
-    ("src.algos.ga_adaptive_gea.AdaptiveGEA", "Adaptive GEA"),
-    ("src.algos.ga_adaptive_gea_scenario_1.AdaptiveGEAScenario1", "Adaptive GEA-S1"),
-    ("src.algos.ga_adaptive_gea_scenario_2.AdaptiveGEAScenario2", "Adaptive GEA-S2"),
-    ("src.algos.ga_adaptive_gea_scenario_3.AdaptiveGEAScenario3", "Adaptive GEA-S3"),
+    ("src.algos.adaptive_gea.ImprovedAdaptiveGEA",       "Adaptive GEA"),
+    ("src.algos.adaptive_gea.StandardAdaptiveGEA",       "Standard Adaptive GEA"),
+    ("src.algos.adaptive_gea_scenario.ImprovedAdaptiveGEAScenario1", "Adaptive GEA-S1"),
+    ("src.algos.adaptive_gea_scenario.StandardAdaptiveGEAScenario1", "Standard Adaptive GEA-S1"),
+    ("src.algos.adaptive_gea_scenario.ImprovedAdaptiveGEAScenario2", "Adaptive GEA-S2"),
+    ("src.algos.adaptive_gea_scenario.StandardAdaptiveGEAScenario2", "Standard Adaptive GEA-S2"),
+    ("src.algos.adaptive_gea_scenario.ImprovedAdaptiveGEAScenario3", "Adaptive GEA-S3"),
+    ("src.algos.adaptive_gea_scenario.StandardAdaptiveGEAScenario3", "Standard Adaptive GEA-S3"),
     ("src.algos.ga_hybrid_gapso.HybridGAPSO", "GA+PSO"),
     ("src.algos.ga_hybrid_gasa.HybridGASA",   "GA+SA"),
-    ("src.algos.ga_adaptive.AdaptiveGA",     "AdaptiveGA"),
+    ("src.algos.adaptive.ImprovedAdaptiveGA",             "Adaptive GA"),
+    ("src.algos.adaptive.StandardAdaptiveGA",             "Standard Adaptive GA"),
 ]
 ALGO_ORDER = [algo_label(t) for t, _ in ALGOS]
 ALGO_DISPLAY = {algo_label(t): name for t, name in ALGOS}

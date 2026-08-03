@@ -55,37 +55,19 @@ class AdaptiveRatesMixin:
         return [child for child, _ in pairs]
 
     def _adaptive_crossover_and_mutation(
-        self, probs
+        self,
+        crossover_fn,
+        mutate_fn,
     ) -> Tuple[List[Individual], List[Individual]]:
-        offspring = self._adaptive_apply(
-            "base_crossover",
-            "lambda_crossover",
-            lambda n: self.crossover(probs, n),
-        )
-        mutations = self._adaptive_apply(
-            "base_mutation",
-            "lambda_mutation",
-            lambda n: self.mutate(n),
-        )
+        offspring = self._adaptive_apply("base_crossover", "lambda_crossover", crossover_fn)
+        mutations = self._adaptive_apply("base_mutation", "lambda_mutation", mutate_fn)
         return offspring, mutations
 
-    def _adaptive_robust_chromosome_crossover(self, probs) -> List[Individual]:
-        return self._adaptive_apply(
-            "base_rc",
-            "lambda_rc",
-            lambda n: self._robust_chromosome_crossover(probs, n),
-        )
+    def _adaptive_robust_chromosome_crossover(self, crossover_fn) -> List[Individual]:
+        return self._adaptive_apply("base_rc", "lambda_rc", crossover_fn)
 
-    def _adaptive_directed_mutation(self) -> List[Individual]:
-        return self._adaptive_apply(
-            "base_dm",
-            "lambda_dm",
-            lambda n: self._directed_mutation(n),
-        )
+    def _adaptive_directed_mutation(self, mutate_fn) -> List[Individual]:
+        return self._adaptive_apply("base_dm", "lambda_dm", mutate_fn)
 
-    def _adaptive_gene_injection(self) -> List[Individual]:
-        return self._adaptive_apply(
-            "base_gi",
-            "lambda_gi",
-            lambda n: self._gene_injection(n),
-        )
+    def _adaptive_gene_injection(self, inject_fn) -> List[Individual]:
+        return self._adaptive_apply("base_gi", "lambda_gi", inject_fn)
