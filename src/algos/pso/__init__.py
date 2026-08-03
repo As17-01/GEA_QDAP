@@ -1,3 +1,3 @@
-from src.algos.pso.algorithm import ImprovedParticleSwarm, ParticleSwarm, StandardParticleSwarm
+from src.algos.pso.algorithm import ImprovedParticleSwarm, StandardParticleSwarm
 
-__all__ = ["StandardParticleSwarm", "ImprovedParticleSwarm", "ParticleSwarm"]
+__all__ = ["StandardParticleSwarm", "ImprovedParticleSwarm"]

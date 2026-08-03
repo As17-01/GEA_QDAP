@@ -75,7 +75,3 @@ class ImprovedHybridGASA(ImprovedBase, AnnealingMixin):
 
     def step(self) -> None:
         self.run_annealing_generation(self.crossover_rate, self.mutation_rate)
-
-
-# Backward-compatible alias for unmigrated imports.
-HybridGASA = ImprovedHybridGASA

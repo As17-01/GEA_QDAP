@@ -93,7 +93,3 @@ class ImprovedParticleSwarm(ImprovedBase, PSOMixin):
         )
         self._inject_pso_immigrants(self.maybe_generate_immigrants())
         self._commit_particles_to_population()
-
-
-# Backward-compatible alias for unmigrated imports.
-ParticleSwarm = ImprovedParticleSwarm

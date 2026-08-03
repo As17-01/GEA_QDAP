@@ -109,12 +109,3 @@ class AlgorithmBase(ABC):
         if self.verbose:
             self.logger.print_final_report(self.best_solution.cost)
         return self.best_solution
-
-
-def __getattr__(name: str):
-    """Lazy alias so unmigrated algorithms can still `from src.algos.core.base import BaseGA`."""
-    if name == "BaseGA":
-        from src.algos.core.improved_base import ImprovedBase
-
-        return ImprovedBase
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

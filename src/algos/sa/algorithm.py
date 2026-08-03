@@ -150,7 +150,3 @@ class ImprovedSA(AlgorithmBase, AnnealingMixin):
 
             self.logger.record_nfe(nfe)
             return perm
-
-
-# Backward-compatible alias for unmigrated imports.
-SimulatedAnnealing = ImprovedSA

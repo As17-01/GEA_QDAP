@@ -6,7 +6,7 @@ from typing import List
 
 # Collects and reports GA timing, iteration, and operator statistics.
 #
-# This is a plain collaborator (composed into BaseGA as `self.logger`), not a mixin --
+# Timing/operator-stat collaborator used by AlgorithmBase as `self.logger`.
 # all the state it needs (timings, counters) is its own, and everything it reports
 # (best cost, diversity) is passed in explicitly rather than reached for via `self`.
 class GALogger:

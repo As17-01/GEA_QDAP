@@ -1,3 +1,3 @@
-from src.algos.sa.algorithm import ImprovedSA, SimulatedAnnealing, StandardSA
+from src.algos.sa.algorithm import ImprovedSA, StandardSA
 
-__all__ = ["StandardSA", "ImprovedSA", "SimulatedAnnealing"]
+__all__ = ["StandardSA", "ImprovedSA"]

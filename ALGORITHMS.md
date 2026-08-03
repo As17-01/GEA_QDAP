@@ -1,14 +1,79 @@
 # Algorithms
 
 This project solves the Generalized Quadratic Assignment Problem (GQAP, see
-[PROBLEM_DESCRIPTION.md](PROBLEM_DESCRIPTION.md)) with fifteen metaheuristics, all sharing
-the same solution representation, problem instance format, and a common scaffolding
-class (`BaseGA`). This document describes that shared scaffolding first, then each
-algorithm built on top of it, then the tuning and experimental procedures.
+[PROBLEM_DESCRIPTION.md](PROBLEM_DESCRIPTION.md)) with **fourteen metaheuristic families**,
+each implemented as a **standard** (Holland-style) and **improved** (GEA-style) pair —
+**28 Hydra configs** in total. All variants share the same solution representation,
+problem instance format, and root run loop (`AlgorithmBase`). This document describes
+the shared scaffolding, the standard/improved architecture, each algorithm family, and
+the tuning and experimental procedures.
 
 ---
 
-## Shared framework (`src/algos/base.py`)
+## Architecture
+
+### Folder layout (`src/algos/`)
+
+| Path | Contents |
+|---|---|
+| `core/base.py` | `AlgorithmBase` — shared init, run loop, repair wrapper |
+| `core/standard_base.py` | `StandardBase` — fitness selection, generational replacement |
+| `core/improved_base.py` | `ImprovedBase` — diversity selection, pool replacement, RC/DM/GI helpers, memetic polish |
+| `core/logger.py` | `GALogger` — iteration timing, NFE, operator stats |
+| `mixins/adaptive.py` | `AdaptiveRatesMixin` — lambda-scaled operator counts |
+| `mixins/annealing.py` | `AnnealingMixin` — Metropolis acceptance + cooling |
+| `mixins/pso.py` | `PSOMixin` — particle tracking, velocity/discrete PSO moves |
+| `ga/algorithm.py` | `StandardGA`, `ImprovedGA` |
+| `gea/algorithm.py` | `StandardGEA`, `ImprovedGEA` |
+| `gea/scenario.py` | `StandardGEAScenario{1,2,3}`, `ImprovedGEAScenario{1,2,3}` |
+| `adaptive/ga.py` | `StandardAdaptiveGA`, `ImprovedAdaptiveGA` |
+| `adaptive/gea.py` | `StandardAdaptiveGEA`, `ImprovedAdaptiveGEA` |
+| `adaptive/gea_scenario.py` | `StandardAdaptiveGEAScenario{1,2,3}`, `ImprovedAdaptiveGEAScenario{1,2,3}` |
+| `sa/algorithm.py` | `StandardSA`, `ImprovedSA` |
+| `pso/algorithm.py` | `StandardParticleSwarm`, `ImprovedParticleSwarm` |
+| `hybrid/ga_sa.py` | `StandardHybridGASA`, `ImprovedHybridGASA` |
+| `hybrid/ga_pso.py` | `StandardHybridGAPSO`, `ImprovedHybridGAPSO` |
+
+### Standard vs improved scaffolding
+
+| Feature | Standard family (`StandardBase`) | Improved family (`ImprovedBase`) |
+|---|---|---|
+| Parent selection | Fitness-proportionate roulette | Diversity-weighted roulette (`DiversitySelector`) |
+| Survivor selection | Generational replacement + elitism | Elite + diversity/cost pool selection |
+| Repair default | `GreedyRepair` | `RFRepair` |
+| Stagnation immigrants | No | Yes (`stagnation_limit`, `immigrant_rate`) |
+| Memetic local search | No | Yes (top-3 elites, disabled when `J > 50`) |
+| Operator batching | Probabilistic rates → fixed counts per generation | Fixed-count pools per generation |
+
+Standard configs use tuned operator rates copied from their improved counterpart plus
+`elitism_count: 5` where applicable. Improved configs are Optuna-tuned and may include
+`components@ga` (repair/selector overrides) in Hydra defaults.
+
+### Config catalog
+
+| Improved config | Standard config | Improved class | Standard class |
+|---|---|---|---|
+| `ga` | `standard` | `ImprovedGA` | `StandardGA` |
+| `gea` | `standard_gea` | `ImprovedGEA` | `StandardGEA` |
+| `adaptive` | `standard_adaptive` | `ImprovedAdaptiveGA` | `StandardAdaptiveGA` |
+| `sa` | `standard_sa` | `ImprovedSA` | `StandardSA` |
+| `pso` | `standard_pso` | `ImprovedParticleSwarm` | `StandardParticleSwarm` |
+| `hybrid_ga_sa` | `standard_hybrid_ga_sa` | `ImprovedHybridGASA` | `StandardHybridGASA` |
+| `hybrid_ga_pso` | `standard_hybrid_ga_pso` | `ImprovedHybridGAPSO` | `StandardHybridGAPSO` |
+| `gea_scenario_1` | `standard_gea_scenario_1` | `ImprovedGEAScenario1` | `StandardGEAScenario1` |
+| `gea_scenario_2` | `standard_gea_scenario_2` | `ImprovedGEAScenario2` | `StandardGEAScenario2` |
+| `gea_scenario_3` | `standard_gea_scenario_3` | `ImprovedGEAScenario3` | `StandardGEAScenario3` |
+| `adaptive_gea` | `standard_adaptive_gea` | `ImprovedAdaptiveGEA` | `StandardAdaptiveGEA` |
+| `adaptive_gea_scenario_1` | `standard_adaptive_gea_scenario_1` | `ImprovedAdaptiveGEAScenario1` | `StandardAdaptiveGEAScenario1` |
+| `adaptive_gea_scenario_2` | `standard_adaptive_gea_scenario_2` | `ImprovedAdaptiveGEAScenario2` | `StandardAdaptiveGEAScenario2` |
+| `adaptive_gea_scenario_3` | `standard_adaptive_gea_scenario_3` | `ImprovedAdaptiveGEAScenario3` | `StandardAdaptiveGEAScenario3` |
+
+Results JSON stems follow `scripts/utils/labels.py` (`StandardGA` → `standard`,
+`ImprovedGA` in `ga` module → `ga`, `ImprovedGEA` → `improvedgea`, etc.).
+
+---
+
+## Shared framework (`src/algos/core/base.py`)
 
 ### Representation
 
@@ -79,14 +144,15 @@ capacity). Repair iteratively evicts an overloaded facility's job and reassigns 
 until feasible:
 
 - **`GreedyRepair`**: deterministic — always picks the worst capacity violation and
-  reassigns to the cheapest feasible facility. Used by `StandardGA` and `SA`.
-- **`RFRepair`** (default for the GEA family): picks from a random subsample of
-  candidates instead of the single greedy best, trading exactness for population
-  diversity.
+  reassigns to the cheapest feasible facility. Default for the **standard family**.
+- **`RFRepair`**: picks from a random subsample of candidates instead of the single
+  greedy best, trading exactness for population diversity. Default for the **improved
+  family**.
 
 ### Selection (`src/selection.py`, `DiversitySelector`)
 
-Used by the GEA family; not used by `StandardGA` or `SA`.
+Used by the **improved family** only; the standard family uses fitness-proportionate
+selection implemented in `StandardBase`.
 
 - **Parent selection**: roulette wheel weighted by each individual's mean Hamming
   distance to the rest of the population — more distinctive individuals are more
@@ -96,11 +162,12 @@ Used by the GEA family; not used by `StandardGA` or `SA`.
   ranked by `diversity_weight · diversity_score + cost_weight · cost_score`, with
   `diversity_weight` decaying linearly over the run so later generations converge.
 
-### Local search (memetic polish)
+### Local search (memetic polish, improved family only)
 
 Each generation, the top 3 individuals receive a per-job hill-climbing pass (try every
 facility for each job, keep whichever lowers cost). Auto-disabled above `J = 50` jobs
-where the O(J·I) cost per pass dominates runtime.
+where the O(J·I) cost per pass dominates runtime. `ImprovedSA` also polishes its single
+solution when `J ≤ 50`.
 
 ### Run loop
 
@@ -110,13 +177,13 @@ seconds) or `iterations` is reached.
 
 ---
 
-## 1. `StandardGA` (`src/algos/ga_standard.py`)
+## 1. Genetic Algorithm — `StandardGA` / `ImprovedGA` (`src/algos/ga/algorithm.py`)
 
 > Holland, J. H. (1992). Genetic algorithms. *Scientific American*, 267(1), 66–73.
 
-The textbook simple genetic algorithm, kept as close to Holland's original description
-as the capacity-constrained encoding allows. It deliberately **does not** use any of
-this project's own GEA enhancements:
+### `StandardGA` (config: `standard`)
+
+The textbook simple genetic algorithm on the Holland scaffold:
 
 - **Selection**: plain fitness-proportionate (roulette wheel) selection on raw cost
   (`fitness = 1 / (cost + ε)`) — no diversity weighting.
@@ -131,20 +198,29 @@ this project's own GEA enhancements:
 - No diversity selection, no `RFRepair` (uses deterministic `GreedyRepair`), no
   stagnation immigrants, no memetic local search.
 
-This is the literal baseline the rest of the algorithms are compared against.
+This is the literal baseline the improved variants are compared against.
 
-> **Design notes:** Uses all four crossover operators (`choose_crossover`) and all nine
-> mutation operators (`choose_mutation`), including the five primary discrete mutation
-> operators: swap, big swap, insertion, reversion, and random. Mutation is applied as a
-> discrete per-individual operator, not as a per-gene Bernoulli trial.
+> **Design notes:** Uses all four crossover operators and all nine mutation operators.
+> Mutation is applied as a discrete per-individual operator, not as a per-gene Bernoulli trial.
+
+### `ImprovedGA` (config: `ga`)
+
+Same crossover + mutation operators as `StandardGA`, but on the **improved scaffold**
+(`DiversitySelector`, `RFRepair`, stagnation immigrants, memetic local search). No RC/DM/GI
+scenario operators — isolates the contribution of the GEA infrastructure from the three
+scenario-specific stages in `ImprovedGEA`.
+
+Hydra config: `scripts/conf/ga.yaml` → results file `ga.json`.
 
 ---
 
-## 2. `GEA` (`src/algos/ga_gea.py`)
+## 2. Full GEA — `StandardGEA` / `ImprovedGEA` (`src/algos/gea/algorithm.py`)
+
+### `ImprovedGEA` (config: `gea`)
 
 This project's own enhanced GA. Where `StandardGA` deliberately bypasses most of the
-shared framework, `GEA` is the opposite: it uses every component described there and
-runs **five operator stages per generation** in fixed sequence:
+improved framework, `ImprovedGEA` uses every improved-family component and runs **five
+operator stages per generation** in fixed sequence:
 
 | Stage | Operator | Rate | Description |
 |---|---|---|---|
@@ -162,43 +238,43 @@ picks the next generation. Additional enhancements:
   iterations, `immigrant_rate · population_size` fresh random individuals are injected.
 - **Memetic local search**: enabled.
 
-> **Design notes:** `ImprovedGA` is the GEA-family baseline with only stages 1–2 (no RC/DM/GI).
-> `GEAScenario1`, `GEAScenario2`, and `GEAScenario3` are **single-enhancement ablations**
-> of the full `GEA` variant — each adds only one of stages 3, 4, or 5 on top of standard
-> crossover + mutation, without the other two. The RC crossover helper
-> (`crossover_robust_chromosome`) is implemented once in `src/operators/crossover.py`; the
-> RC, DM, and GI driver methods live on `BaseGA` (`_robust_chromosome_crossover`,
-> `_directed_mutation`, `_gene_injection`) so all subclasses that need them (GEA,
-> Scenario1/2/3, AdaptiveGEA, AdaptiveGEAScenario1/2/3) inherit rather than duplicate them.
+### `StandardGEA` (config: `standard_gea`)
+
+Same five operator stages and rates as `ImprovedGEA`, but on the **Holland scaffold**:
+fitness-proportionate parent selection, probabilistic operators, generational replacement
+with `elitism_count: 5`, and `GreedyRepair`. No diversity selection, immigrants, or
+memetic polish.
+
+> **Design notes:** `ImprovedGA` is the improved-family baseline with only stages 1–2 (no RC/DM/GI).
+> `ImprovedGEAScenario{1,2,3}` are **single-enhancement ablations** of the full `ImprovedGEA` —
+> each adds only one of stages 3, 4, or 5 on top of standard crossover + mutation.
+> The RC crossover helper (`crossover_robust_chromosome`) lives in `src/operators/crossover.py`;
+> RC/DM/GI driver methods live on `ImprovedBase` (`_robust_chromosome_crossover`,
+> `_directed_mutation`, `_gene_injection`) so all improved subclasses inherit them.
 
 ---
 
-## 3. `ImprovedGA` (`src/algos/ga_improved_ga.py`)
+## 3. Improved GA without scenarios — see §1 `ImprovedGA`
 
-The GEA-family baseline **without** any scenario operators (RC, DM, or GI). Each generation
-runs only:
-
-1. **Regular crossover** (`choose_crossover`, all 4 operators) at `crossover_rate`.
-2. **Regular mutation** (`choose_mutation`, all 9 operators) at `mutation_rate`.
-
-All other GEA-family machinery is retained: `DiversitySelector`, `RFRepair`, stagnation
-immigrants, and memetic local search. This isolates the contribution of the shared GEA
-scaffolding from the three scenario-specific operator stages in `GEA`.
-
-Hydra config: `scripts/conf/improved_ga.yaml` → results file `improved.json`.
+*(Documented above alongside `StandardGA`.)*
 
 ---
 
-## 4. `AdaptiveGA` (`src/algos/ga_adaptive.py`)
+## 4. Adaptive GA — `StandardAdaptiveGA` / `ImprovedAdaptiveGA` (`src/algos/adaptive/ga.py`)
 
 > **Scope note:** This algorithm is included in tuning and final experiment runs
 > alongside the rest of the algorithms, but its results **may not be reported** in this
 > paper. It will be formally proposed in a follow-up project with a new cost function.
 
-Same GEA-family infrastructure as `ImprovedGA` (diversity selection, `RFRepair`,
+Same improved-family infrastructure as `ImprovedGA` (diversity selection, `RFRepair`,
 stagnation immigrants, memetic local search). Crossover and mutation counts adapt every
 generation (see **Adaptive rate mechanism** below). Scenario operators (RC/DM/GI) are
 not used.
+
+### `StandardAdaptiveGA` (config: `standard_adaptive`)
+
+Same lambda-adaptive crossover/mutation on the **Holland scaffold** with generational
+replacement and `elitism_count: 5`.
 
 ### Adaptive rate mechanism
 
@@ -212,25 +288,27 @@ Each operator present in an adaptive algorithm maintains its own lambda multipli
 
 Comparing to the parent baseline (not the global best) prevents lambda from collapsing
 toward `lambda_min` once the population converges. Shared logic lives in
-`src/algos/adaptive_mixin.py` (`AdaptiveRatesMixin`).
+`src/algos/mixins/adaptive.py` (`AdaptiveRatesMixin`).
 
 | Algorithm | Adaptive operators |
 |---|---|
-| `AdaptiveGA` | crossover, mutation |
-| `AdaptiveGEA` | crossover, mutation, RC, DM, GI |
-| `AdaptiveGEAScenario1` | crossover, mutation, RC |
-| `AdaptiveGEAScenario2` | crossover, mutation, DM |
-| `AdaptiveGEAScenario3` | crossover, mutation, GI |
+| `ImprovedAdaptiveGA` / `StandardAdaptiveGA` | crossover, mutation |
+| `ImprovedAdaptiveGEA` / `StandardAdaptiveGEA` | crossover, mutation, RC, DM, GI |
+| `ImprovedAdaptiveGEAScenario1` / `StandardAdaptiveGEAScenario1` | crossover, mutation, RC |
+| `ImprovedAdaptiveGEAScenario2` / `StandardAdaptiveGEAScenario2` | crossover, mutation, DM |
+| `ImprovedAdaptiveGEAScenario3` / `StandardAdaptiveGEAScenario3` | crossover, mutation, GI |
 
 Stagnation immigrants remain at fixed `immigrant_rate`.
 
 ---
 
-## 5. `SimulatedAnnealing` (`src/algos/ga_sa.py`)
+## 5. Simulated Annealing — `StandardSA` / `ImprovedSA` (`src/algos/sa/algorithm.py`)
 
-Classic **single-solution** SA. Population size is forced to `1` — population-based SA
-is not acceptable in the literature; the algorithm starts from one initial solution and
-anneals it only. Each iteration, one neighbor is proposed via `choose_mutation` and:
+### `ImprovedSA` (config: `sa`)
+
+Classic **single-solution** SA on `AlgorithmBase` + `AnnealingMixin`. Population size
+is forced to `1`. Uses `RFRepair` by default and optional memetic polish when `J ≤ 50`.
+Each iteration, one neighbor is proposed via `choose_mutation` and:
 
 - accepted outright if better (`cost ≤ current`), or
 - accepted with Metropolis probability `exp(-Δ/T)` if worse.
@@ -239,14 +317,18 @@ Temperature is cooled geometrically after each step:
 `T ← max(T_min, T · cooling_rate)`. There is no crossover, no population selection,
 no immigrants.
 
+### `StandardSA` (config: `standard_sa`)
+
+Same Metropolis annealing loop with `GreedyRepair` and no memetic polish.
+
 > **Design notes:** A population-based multi-walker SA would share a temperature
-> schedule across independent chains with no selection pressure between them — this
-> does not correspond to the SA algorithm described in the literature. The
-> single-solution version is used throughout this project.
+schedule across independent chains with no selection pressure between them — this
+does not correspond to the SA algorithm described in the literature. The
+single-solution version is used throughout this project.
 
 ---
 
-## 6. `ParticleSwarm` (`src/algos/ga_pso.py`)
+## 6. Particle Swarm — `StandardParticleSwarm` / `ImprovedParticleSwarm` (`src/algos/pso/algorithm.py`)
 
 > Kennedy, J., & Eberhart, R. (1995, November). Particle swarm optimization.
 > *Proceedings of ICNN'95* (Vol. 4, pp. 1942–1948).
@@ -273,8 +355,16 @@ step size. This extension preserves the original PSO velocity semantics — cogn
 and social pulls are proportional to the integer distance between positions —
 while mapping updates back into the feasible integer domain via rounding and repair.
 
+### `ImprovedParticleSwarm` (config: `pso`)
+
+Uses `ImprovedBase` + `PSOMixin`: `RFRepair`, stagnation immigrants, memetic polish.
+
+### `StandardParticleSwarm` (config: `standard_pso`)
+
+Same velocity PSO on `AlgorithmBase` + `PSOMixin` with `GreedyRepair` and no immigrants.
+
 Particle identity (`self.particles` / `self.personal_best` / `self.velocities`) is
-maintained separately from `self.population`'s ordering, since `BaseGA.run()` re-sorts
+maintained separately from `self.population`'s ordering, since `AlgorithmBase.run()` re-sorts
 `self.population` by cost after every step, which would corrupt positional identity.
 
 > **Design notes:** PSO is a continuous-space algorithm by origin. Applying it directly
@@ -286,7 +376,7 @@ maintained separately from `self.population`'s ordering, since `BaseGA.run()` re
 
 ---
 
-## 7. `HybridGAPSO` (`src/algos/ga_hybrid_gapso.py`)
+## 7. Hybrid GA+PSO — `StandardHybridGAPSO` / `ImprovedHybridGAPSO` (`src/algos/hybrid/ga_pso.py`)
 
 > Juang, C. F. (2004). A hybrid of genetic algorithm and particle swarm optimization
 > for recurrent network design. *IEEE Transactions on Systems, Man, and Cybernetics,
@@ -304,11 +394,12 @@ An elitist replacement step guarantees the swarm's best-ever solution survives i
 the next generation, as in the original paper.
 
 > **Design notes:** The GA component uses the same `choose_crossover` / `choose_mutation`
-> operator sets as all other algorithms in this project.
+> operator sets as all other algorithms. `ImprovedHybridGAPSO` uses pool selection on the
+> GA fraction; `StandardHybridGAPSO` uses fitness-based generational selection on that fraction.
 
 ---
 
-## 8. `HybridGASA` (`src/algos/ga_hybrid_gasa.py`)
+## 8. Hybrid GA+SA — `StandardHybridGASA` / `ImprovedHybridGASA` (`src/algos/hybrid/ga_sa.py`)
 
 > Chen, P. H., & Shahandashti, S. M. (2009). Hybrid of genetic algorithm and simulated
 > annealing for multiple project scheduling with multiple resource constraints.
@@ -327,15 +418,17 @@ quality-losing moves (escaping local optima) while late generations behave like 
 plain elitist GA.
 
 > **Design notes:** This hybrid retains a population-based structure (unlike standalone
-> SA, §4), which is appropriate here because the annealing only governs the *acceptance
-> criterion* — the population-level crossover and diversity selection still operate as
-> in GEA.
+> SA, §5). `ImprovedHybridGASA` filters offspring through Metropolis acceptance then
+> pool selection; `StandardHybridGASA` does the same then generational replacement with
+> `elitism_count: 5`.
 
 ---
 
-## 9. `GEAScenario1` — Crossover with Robust Chromosome (`src/algos/ga_gea_scenario_1.py`)
+## 9. GEA Scenario 1 — RC crossover (`src/algos/gea/scenario.py`)
 
-Modernization of `GEA` — Scenario 1: **RC (Robust Chromosome) crossover**.
+`ImprovedGEAScenario1` (config: `gea_scenario_1`) / `StandardGEAScenario1` (config: `standard_gea_scenario_1`)
+
+Modernization of `ImprovedGEA` — Scenario 1: **RC (Robust Chromosome) crossover**.
 
 Runs three operators each generation at **fixed rates** — no adaptive lambda:
 
@@ -349,15 +442,15 @@ All three sets of offspring are pooled with the current population; `DiversitySe
 picks the next generation.
 
 > **Design notes:** The fixed-rate version is reported in this paper. The adaptive
-> counterpart (`AdaptiveGEAScenario1`, §13) is tuned and run alongside the rest but may
-> be reported separately. All crossover and mutation operators are identical to those used
-> in the base GEA and StandardGA.
+> counterpart (`ImprovedAdaptiveGEAScenario1`, §13) is tuned and run alongside the rest.
 
 ---
 
-## 10. `GEAScenario2` — Directed Mutation (`src/algos/ga_gea_scenario_2.py`)
+## 10. GEA Scenario 2 — Directed Mutation (`src/algos/gea/scenario.py`)
 
-Modernization of `GEA` — Scenario 2: **DM (Directed Mutation)**.
+`ImprovedGEAScenario2` / `StandardGEAScenario2`
+
+Modernization of `ImprovedGEA` — Scenario 2: **DM (Directed Mutation)**.
 
 Runs three operators each generation at **fixed rates** — no adaptive lambda:
 
@@ -367,15 +460,16 @@ Runs three operators each generation at **fixed rates** — no adaptive lambda:
    single worst-assigned job to its cheapest feasible facility — a directed,
    fitness-improving move rather than a blind random one.
 
-> **Design notes:** As with Scenario 1, the fixed-rate version is reported here; the
-> adaptive counterpart is `AdaptiveGEAScenario2` (§14). Crossover and mutation operator
-> sets are identical to the rest of the family.
+> **Design notes:** Fixed-rate version reported here; adaptive counterpart is
+> `ImprovedAdaptiveGEAScenario2` (§14).
 
 ---
 
-## 11. `GEAScenario3` — Gene Injection (`src/algos/ga_gea_scenario_3.py`)
+## 11. GEA Scenario 3 — Gene Injection (`src/algos/gea/scenario.py`)
 
-Modernization of `GEA` — Scenario 3: **GI (Gene Injection)**.
+`ImprovedGEAScenario3` / `StandardGEAScenario3`
+
+Modernization of `ImprovedGEA` — Scenario 3: **GI (Gene Injection)**.
 
 Runs three operators each generation at **fixed rates** — no adaptive lambda:
 
@@ -385,44 +479,48 @@ Runs three operators each generation at **fixed rates** — no adaptive lambda:
    with brand-new random facility assignments, injecting fresh genetic material rather
    than perturbing the existing assignment.
 
-> **Design notes:** As with Scenarios 1 and 2, the fixed-rate version is reported here;
-> the adaptive counterpart is `AdaptiveGEAScenario3` (§15). Crossover and mutation
-> operator sets are identical to the rest of the family.
+> **Design notes:** Fixed-rate version reported here; adaptive counterpart is
+> `ImprovedAdaptiveGEAScenario3` (§15).
 
 ---
 
-## 12. `AdaptiveGEA` (`src/algos/ga_adaptive_gea.py`)
+## 12. Adaptive GEA — `StandardAdaptiveGEA` / `ImprovedAdaptiveGEA` (`src/algos/adaptive/gea.py`)
 
-Full `GEA` (all five operator stages) with **lambda-adaptive rates on every stage**
-(crossover, mutation, RC, DM, GI) — see §4 adaptive rate mechanism. Config still
-exposes base rates as `crossover_rate`, `mutation_rate`, `rc_rate`, `dm_rate`, and
-`injection_rate`; each is scaled by its own lambda each generation.
+### `ImprovedAdaptiveGEA` (config: `adaptive_gea`)
+
+Full `ImprovedGEA` (all five operator stages) with **lambda-adaptive rates on every stage**
+(crossover, mutation, RC, DM, GI) — see §4 adaptive rate mechanism.
 
 Hydra config: `scripts/conf/adaptive_gea.yaml` → results file `adaptivegea.json`.
 
----
+### `StandardAdaptiveGEA` (config: `standard_adaptive_gea`)
 
-## 13. `AdaptiveGEAScenario1` (`src/algos/ga_adaptive_gea_scenario_1.py`)
-
-`GEAScenario1` with adaptive crossover, mutation, and RC rates.
-
-Hydra config: `scripts/conf/adaptive_gea_scenario_1.yaml`.
+Same adaptive operator scaling on the Holland scaffold with generational replacement.
 
 ---
 
-## 14. `AdaptiveGEAScenario2` (`src/algos/ga_adaptive_gea_scenario_2.py`)
+## 13. Adaptive GEA Scenario 1 (`src/algos/adaptive/gea_scenario.py`)
 
-`GEAScenario2` with adaptive crossover, mutation, and DM rates.
+`ImprovedAdaptiveGEAScenario1` (config: `adaptive_gea_scenario_1`) /
+`StandardAdaptiveGEAScenario1` (config: `standard_adaptive_gea_scenario_1`)
 
-Hydra config: `scripts/conf/adaptive_gea_scenario_2.yaml`.
+`ImprovedGEAScenario1` with adaptive crossover, mutation, and RC rates.
 
 ---
 
-## 15. `AdaptiveGEAScenario3` (`src/algos/ga_adaptive_gea_scenario_3.py`)
+## 14. Adaptive GEA Scenario 2 (`src/algos/adaptive/gea_scenario.py`)
 
-`GEAScenario3` with adaptive crossover, mutation, and GI rates.
+`ImprovedAdaptiveGEAScenario2` / `StandardAdaptiveGEAScenario2`
 
-Hydra config: `scripts/conf/adaptive_gea_scenario_3.yaml`.
+`ImprovedGEAScenario2` with adaptive crossover, mutation, and DM rates.
+
+---
+
+## 15. Adaptive GEA Scenario 3 (`src/algos/adaptive/gea_scenario.py`)
+
+`ImprovedAdaptiveGEAScenario3` / `StandardAdaptiveGEAScenario3`
+
+`ImprovedGEAScenario3` with adaptive crossover, mutation, and GI rates.
 
 ---
 
@@ -487,23 +585,24 @@ poetry run python scripts/tune_algorithm.py --config-name="tune_algorithm/gea"
 
 ### Algorithms in scope for tuning
 
-| Algorithm | Key tunable parameters |
+Improved configs are Optuna-tuned; each has a matching `standard_*` config whose operator
+rates are copied from the tuned improved counterpart (plus `elitism_count: 5` on the
+Holland scaffold).
+
+| Config | Key tunable parameters |
 |---|---|
-| `StandardGA` | `crossover_rate`, `mutation_rate`, `elitism_count` |
-| `GEA` | `crossover_rate`, `mutation_rate`, `rc_rate`, `dm_rate`, `injection_rate`, `stagnation_limit`, `immigrant_rate` |
-| `ImprovedGA` | `crossover_rate`, `mutation_rate`, `stagnation_limit`, `immigrant_rate` |
-| `AdaptiveGA` | `crossover_rate`, `mutation_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
-| `AdaptiveGEA` | `crossover_rate`, `mutation_rate`, `rc_rate`, `dm_rate`, `injection_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
-| `SA` | `initial_temperature`, `cooling_rate`, `min_temperature` |
-| `PSO` | `inertia_weight`, `cognitive_weight`, `social_weight`, `stagnation_limit` |
-| `HybridGAPSO` | `pso_fraction`, `inertia_weight`, `cognitive_weight`, `social_weight`, `crossover_rate`, `mutation_rate` |
-| `HybridGASA` | `crossover_rate`, `mutation_rate`, `initial_temperature`, `cooling_rate` |
-| `GEAScenario1` | `crossover_rate`, `mutation_rate`, `rc_rate`, `stagnation_limit`, `immigrant_rate` |
-| `GEAScenario2` | `crossover_rate`, `mutation_rate`, `dm_rate`, `stagnation_limit`, `immigrant_rate` |
-| `GEAScenario3` | `crossover_rate`, `mutation_rate`, `injection_rate`, `stagnation_limit`, `immigrant_rate` |
-| `AdaptiveGEAScenario1` | `crossover_rate`, `mutation_rate`, `rc_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
-| `AdaptiveGEAScenario2` | `crossover_rate`, `mutation_rate`, `dm_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
-| `AdaptiveGEAScenario3` | `crossover_rate`, `mutation_rate`, `injection_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
+| `standard` / `ga` | `crossover_rate`, `mutation_rate`, (`elitism_count` on standard) |
+| `standard_gea` / `gea` | `crossover_rate`, `mutation_rate`, `rc_rate`, `dm_rate`, `injection_rate`, `stagnation_limit`, `immigrant_rate` |
+| `standard_adaptive` / `adaptive` | `crossover_rate`, `mutation_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
+| `standard_sa` / `sa` | `initial_temperature`, `cooling_rate`, `min_temperature` |
+| `standard_pso` / `pso` | `inertia_weight`, `cognitive_weight`, `social_weight`, `stagnation_limit`, `immigrant_rate` |
+| `standard_hybrid_ga_pso` / `hybrid_ga_pso` | `pso_fraction`, `inertia_weight`, `cognitive_weight`, `social_weight`, `crossover_rate`, `mutation_rate` |
+| `standard_hybrid_ga_sa` / `hybrid_ga_sa` | `crossover_rate`, `mutation_rate`, `initial_temperature`, `cooling_rate` |
+| `standard_gea_scenario_1` / `gea_scenario_1` | `crossover_rate`, `mutation_rate`, `rc_rate`, … |
+| `standard_gea_scenario_2` / `gea_scenario_2` | `crossover_rate`, `mutation_rate`, `dm_rate`, … |
+| `standard_gea_scenario_3` / `gea_scenario_3` | `crossover_rate`, `mutation_rate`, `injection_rate`, … |
+| `standard_adaptive_gea` / `adaptive_gea` | all GEA rates + `alpha`, `lambda_min`, `lambda_max`, … |
+| `standard_adaptive_gea_scenario_*` / `adaptive_gea_scenario_*` | scenario-specific rates + adaptive knobs |
 
 ---
 
