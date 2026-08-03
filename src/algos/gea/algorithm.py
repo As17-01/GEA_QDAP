@@ -1,5 +1,5 @@
-from src.algos.improved_base import ImprovedBase
-from src.algos.standard_base import StandardBase
+from src.algos.core.improved_base import ImprovedBase
+from src.algos.core.standard_base import StandardBase
 
 
 class StandardGEA(StandardBase):

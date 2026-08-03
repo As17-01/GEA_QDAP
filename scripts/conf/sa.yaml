@@ -5,7 +5,7 @@ defaults:
   - _self_
 
 ga:
-  _target_: src.algos.ga_sa.SimulatedAnnealing
+  _target_: src.algos.sa.ImprovedSA
   population_size: 1
   iterations: 1000
   initial_temperature: 194.89569674489042

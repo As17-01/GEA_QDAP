@@ -9,7 +9,7 @@ run:
   output_file: results/gea_scenario_1.json
 
 ga:
-  _target_: src.algos.gea_scenario.ImprovedGEAScenario1
+  _target_: src.algos.gea.ImprovedGEAScenario1
   population_size: 350
   iterations: 1000
   crossover_rate: 0.6254706108973966

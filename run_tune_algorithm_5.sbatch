@@ -18,7 +18,7 @@ module load Python
 source activate gea_gqap_v2_env
 
 ALGORITHMS=(
-    improved_ga
+    ga
     adaptive_gea
 )
 

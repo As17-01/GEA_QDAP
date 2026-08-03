@@ -6,7 +6,7 @@ defaults:
   - _self_
 
 ga:
-  _target_: src.algos.ga_pso.ParticleSwarm
+  _target_: src.algos.pso.ImprovedParticleSwarm
   population_size: 350
   iterations: 1000
   inertia_weight: 0.5067528830285765

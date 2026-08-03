@@ -3,7 +3,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from src.algos.base import LOCAL_SEARCH_MAX_J, LOCAL_SEARCH_MAX_PASSES, LOCAL_SEARCH_TOP_K, AlgorithmBase
+from src.algos.core.base import LOCAL_SEARCH_MAX_J, LOCAL_SEARCH_MAX_PASSES, LOCAL_SEARCH_TOP_K, AlgorithmBase
 from src.costs import (
     cost_function_perm,
     cost_function_perm_delta,
@@ -360,3 +360,18 @@ class ImprovedBase(AlgorithmBase):
 
         pool += self.maybe_generate_immigrants()
         self.select_from_pool(pool)
+
+    def run_annealing_generation(self, crossover_rate: float, mutation_rate: float) -> None:
+        """Improved GA offspring filtered by Metropolis acceptance, then pool selection."""
+        probs = self.compute_selection_probabilities()
+
+        ncrossover = int(2 * round((crossover_rate * self.population_size) / 2))
+        nmutation = int(math.floor(mutation_rate * self.population_size))
+
+        offspring = self._anneal_accept(self.crossover(probs, ncrossover))
+        mutations = self._anneal_accept(self.mutate(nmutation))
+        immigrants = self.maybe_generate_immigrants()
+
+        pool = self.population + offspring + mutations + immigrants
+        self.select_from_pool(pool)
+        self._cool_temperature()

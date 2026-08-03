@@ -3,7 +3,7 @@ from typing import List
 
 import numpy as np
 
-from src.algos.logger import GALogger
+from src.algos.core.logger import GALogger
 from src.costs import evaluate_permutation
 from src.data.models import Individual, Model
 
@@ -112,9 +112,9 @@ class AlgorithmBase(ABC):
 
 
 def __getattr__(name: str):
-    """Lazy alias so unmigrated algorithms can still `from src.algos.base import BaseGA`."""
+    """Lazy alias so unmigrated algorithms can still `from src.algos.core.base import BaseGA`."""
     if name == "BaseGA":
-        from src.algos.improved_base import ImprovedBase
+        from src.algos.core.improved_base import ImprovedBase
 
         return ImprovedBase
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

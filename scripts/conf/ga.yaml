@@ -5,6 +5,9 @@ defaults:
   - hydra: common
   - _self_
 
+run:
+  output_file: results/ga.json
+
 ga:
   _target_: src.algos.ga.ImprovedGA
   population_size: 350

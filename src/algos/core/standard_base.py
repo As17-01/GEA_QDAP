@@ -1,6 +1,8 @@
+import math
+
 import numpy as np
 
-from src.algos.base import AlgorithmBase
+from src.algos.core.base import AlgorithmBase
 from src.costs import evaluate_permutation_delta_batch
 from src.data.models import Individual
 from src.operators.crossover import choose_crossover, crossover_robust_chromosome
@@ -247,3 +249,18 @@ class StandardBase(AlgorithmBase):
     ) -> None:
         """One standard-family generation of crossover + mutation with generational replacement."""
         self.run_gea_generational(crossover_rate, mutation_rate, elitism_count)
+
+    def run_annealing_generational(
+        self,
+        crossover_rate: float,
+        mutation_rate: float,
+        elitism_count: int,
+    ) -> None:
+        """Standard GA offspring filtered by Metropolis acceptance, then generational replacement."""
+        ncrossover = int(2 * round((crossover_rate * self.population_size) / 2))
+        nmutation = int(math.floor(mutation_rate * self.population_size))
+
+        offspring = self._anneal_accept(self._standard_crossover_batch(ncrossover))
+        mutations = self._anneal_accept(self._standard_mutate_batch(nmutation))
+        self._finalize_adaptive_offspring(offspring + mutations, elitism_count)
+        self._cool_temperature()

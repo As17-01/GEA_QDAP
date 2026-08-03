@@ -6,7 +6,7 @@ defaults:
   - _self_
 
 ga:
-  _target_: src.algos.ga_hybrid_gapso.HybridGAPSO
+  _target_: src.algos.hybrid.ImprovedHybridGAPSO
   population_size: 350
   iterations: 1000
   pso_fraction: 0.21326364470056852

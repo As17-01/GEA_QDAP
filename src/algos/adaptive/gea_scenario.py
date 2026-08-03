@@ -1,40 +1,9 @@
-from src.algos.improved_base import ImprovedBase
-from src.algos.standard_base import StandardBase
+from src.algos.mixins.adaptive import AdaptiveRatesMixin
+from src.algos.core.improved_base import ImprovedBase
+from src.algos.core.standard_base import StandardBase
 
 
-class StandardGEAScenario1(StandardBase):
-    """Scenario 1 (RC crossover) on the Holland scaffold."""
-
-    def __init__(
-        self,
-        model,
-        population_size=350,
-        iterations=1000,
-        crossover_rate=0.7,
-        mutation_rate=0.01,
-        rc_rate=0.3,
-        elitism_count=1,
-        repair_class=None,
-        verbose=False,
-    ):
-        super().__init__(model, population_size, iterations, repair_class=repair_class, verbose=verbose)
-        self.crossover_rate = crossover_rate
-        self.mutation_rate = mutation_rate
-        self.rc_rate = rc_rate
-        self.elitism_count = elitism_count
-
-    def step(self) -> None:
-        self.run_gea_generational(
-            self.crossover_rate,
-            self.mutation_rate,
-            self.elitism_count,
-            rc_rate=self.rc_rate,
-        )
-
-
-class ImprovedGEAScenario1(ImprovedBase):
-    """Scenario 1 (RC crossover) on the GEA-family scaffold."""
-
+class StandardAdaptiveGEAScenario1(StandardBase, AdaptiveRatesMixin):
     def __init__(
         self,
         model,
@@ -43,6 +12,36 @@ class ImprovedGEAScenario1(ImprovedBase):
         crossover_rate=0.7,
         mutation_rate=0.3,
         rc_rate=0.3,
+        alpha=0.01,
+        lambda_min=0.4,
+        lambda_max=1.5,
+        epsilon=1e-5,
+        elitism_count=1,
+        repair_class=None,
+        verbose=False,
+    ):
+        super().__init__(model, population_size, iterations, repair_class=repair_class, verbose=verbose)
+        self._init_adaptive_rates(crossover_rate, mutation_rate, alpha, lambda_min, lambda_max, epsilon)
+        self._init_adaptive_scenario_rate("base_rc", "lambda_rc", rc_rate)
+        self.elitism_count = elitism_count
+
+    def step(self) -> None:
+        self.run_adaptive_generational(self.elitism_count, rc_rate=self.base_rc)
+
+
+class ImprovedAdaptiveGEAScenario1(ImprovedBase, AdaptiveRatesMixin):
+    def __init__(
+        self,
+        model,
+        population_size=350,
+        iterations=1000,
+        crossover_rate=0.7,
+        mutation_rate=0.3,
+        rc_rate=0.3,
+        alpha=0.01,
+        lambda_min=0.4,
+        lambda_max=1.5,
+        epsilon=1e-5,
         repair_class=None,
         selector=None,
         stagnation_limit=30,
@@ -59,47 +58,14 @@ class ImprovedGEAScenario1(ImprovedBase):
             immigrant_rate=immigrant_rate,
             verbose=verbose,
         )
-        self.crossover_rate = crossover_rate
-        self.mutation_rate = mutation_rate
-        self.rc_rate = rc_rate
+        self._init_adaptive_rates(crossover_rate, mutation_rate, alpha, lambda_min, lambda_max, epsilon)
+        self._init_adaptive_scenario_rate("base_rc", "lambda_rc", rc_rate)
 
     def step(self) -> None:
-        self.run_gea_generation(self.crossover_rate, self.mutation_rate, rc_rate=self.rc_rate)
+        self.run_adaptive_generation(rc_rate=self.base_rc)
 
 
-class StandardGEAScenario2(StandardBase):
-    """Scenario 2 (directed mutation) on the Holland scaffold."""
-
-    def __init__(
-        self,
-        model,
-        population_size=350,
-        iterations=1000,
-        crossover_rate=0.7,
-        mutation_rate=0.01,
-        dm_rate=0.3,
-        elitism_count=1,
-        repair_class=None,
-        verbose=False,
-    ):
-        super().__init__(model, population_size, iterations, repair_class=repair_class, verbose=verbose)
-        self.crossover_rate = crossover_rate
-        self.mutation_rate = mutation_rate
-        self.dm_rate = dm_rate
-        self.elitism_count = elitism_count
-
-    def step(self) -> None:
-        self.run_gea_generational(
-            self.crossover_rate,
-            self.mutation_rate,
-            self.elitism_count,
-            dm_rate=self.dm_rate,
-        )
-
-
-class ImprovedGEAScenario2(ImprovedBase):
-    """Scenario 2 (directed mutation) on the GEA-family scaffold."""
-
+class StandardAdaptiveGEAScenario2(StandardBase, AdaptiveRatesMixin):
     def __init__(
         self,
         model,
@@ -108,6 +74,36 @@ class ImprovedGEAScenario2(ImprovedBase):
         crossover_rate=0.7,
         mutation_rate=0.3,
         dm_rate=0.3,
+        alpha=0.01,
+        lambda_min=0.4,
+        lambda_max=1.5,
+        epsilon=1e-5,
+        elitism_count=1,
+        repair_class=None,
+        verbose=False,
+    ):
+        super().__init__(model, population_size, iterations, repair_class=repair_class, verbose=verbose)
+        self._init_adaptive_rates(crossover_rate, mutation_rate, alpha, lambda_min, lambda_max, epsilon)
+        self._init_adaptive_scenario_rate("base_dm", "lambda_dm", dm_rate)
+        self.elitism_count = elitism_count
+
+    def step(self) -> None:
+        self.run_adaptive_generational(self.elitism_count, dm_rate=self.base_dm)
+
+
+class ImprovedAdaptiveGEAScenario2(ImprovedBase, AdaptiveRatesMixin):
+    def __init__(
+        self,
+        model,
+        population_size=350,
+        iterations=1000,
+        crossover_rate=0.7,
+        mutation_rate=0.3,
+        dm_rate=0.3,
+        alpha=0.01,
+        lambda_min=0.4,
+        lambda_max=1.5,
+        epsilon=1e-5,
         repair_class=None,
         selector=None,
         stagnation_limit=30,
@@ -124,47 +120,14 @@ class ImprovedGEAScenario2(ImprovedBase):
             immigrant_rate=immigrant_rate,
             verbose=verbose,
         )
-        self.crossover_rate = crossover_rate
-        self.mutation_rate = mutation_rate
-        self.dm_rate = dm_rate
+        self._init_adaptive_rates(crossover_rate, mutation_rate, alpha, lambda_min, lambda_max, epsilon)
+        self._init_adaptive_scenario_rate("base_dm", "lambda_dm", dm_rate)
 
     def step(self) -> None:
-        self.run_gea_generation(self.crossover_rate, self.mutation_rate, dm_rate=self.dm_rate)
+        self.run_adaptive_generation(dm_rate=self.base_dm)
 
 
-class StandardGEAScenario3(StandardBase):
-    """Scenario 3 (gene injection) on the Holland scaffold."""
-
-    def __init__(
-        self,
-        model,
-        population_size=350,
-        iterations=1000,
-        crossover_rate=0.7,
-        mutation_rate=0.01,
-        injection_rate=0.1,
-        elitism_count=1,
-        repair_class=None,
-        verbose=False,
-    ):
-        super().__init__(model, population_size, iterations, repair_class=repair_class, verbose=verbose)
-        self.crossover_rate = crossover_rate
-        self.mutation_rate = mutation_rate
-        self.injection_rate = injection_rate
-        self.elitism_count = elitism_count
-
-    def step(self) -> None:
-        self.run_gea_generational(
-            self.crossover_rate,
-            self.mutation_rate,
-            self.elitism_count,
-            injection_rate=self.injection_rate,
-        )
-
-
-class ImprovedGEAScenario3(ImprovedBase):
-    """Scenario 3 (gene injection) on the GEA-family scaffold."""
-
+class StandardAdaptiveGEAScenario3(StandardBase, AdaptiveRatesMixin):
     def __init__(
         self,
         model,
@@ -173,6 +136,36 @@ class ImprovedGEAScenario3(ImprovedBase):
         crossover_rate=0.7,
         mutation_rate=0.3,
         injection_rate=0.1,
+        alpha=0.01,
+        lambda_min=0.4,
+        lambda_max=1.5,
+        epsilon=1e-5,
+        elitism_count=1,
+        repair_class=None,
+        verbose=False,
+    ):
+        super().__init__(model, population_size, iterations, repair_class=repair_class, verbose=verbose)
+        self._init_adaptive_rates(crossover_rate, mutation_rate, alpha, lambda_min, lambda_max, epsilon)
+        self._init_adaptive_scenario_rate("base_gi", "lambda_gi", injection_rate)
+        self.elitism_count = elitism_count
+
+    def step(self) -> None:
+        self.run_adaptive_generational(self.elitism_count, injection_rate=self.base_gi)
+
+
+class ImprovedAdaptiveGEAScenario3(ImprovedBase, AdaptiveRatesMixin):
+    def __init__(
+        self,
+        model,
+        population_size=350,
+        iterations=1000,
+        crossover_rate=0.7,
+        mutation_rate=0.3,
+        injection_rate=0.1,
+        alpha=0.01,
+        lambda_min=0.4,
+        lambda_max=1.5,
+        epsilon=1e-5,
         repair_class=None,
         selector=None,
         stagnation_limit=30,
@@ -189,13 +182,8 @@ class ImprovedGEAScenario3(ImprovedBase):
             immigrant_rate=immigrant_rate,
             verbose=verbose,
         )
-        self.crossover_rate = crossover_rate
-        self.mutation_rate = mutation_rate
-        self.injection_rate = injection_rate
+        self._init_adaptive_rates(crossover_rate, mutation_rate, alpha, lambda_min, lambda_max, epsilon)
+        self._init_adaptive_scenario_rate("base_gi", "lambda_gi", injection_rate)
 
     def step(self) -> None:
-        self.run_gea_generation(
-            self.crossover_rate,
-            self.mutation_rate,
-            injection_rate=self.injection_rate,
-        )
+        self.run_adaptive_generation(injection_rate=self.base_gi)

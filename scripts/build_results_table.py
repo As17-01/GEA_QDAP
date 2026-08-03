@@ -24,30 +24,34 @@ from utils.labels import algo_label
 
 # (ga._target_, display name) — stems match results/*.json via algo_label in conf/run/common.yaml
 ALGOS = [
-    ("src.algos.ga.StandardGA",                "Standard GA"),
-    ("src.algos.ga_sa.SimulatedAnnealing",    "SA"),
-    ("src.algos.ga_pso.ParticleSwarm",        "PSO"),
-    ("src.algos.gea.ImprovedGEA",                         "GEA"),
-    ("src.algos.gea.StandardGEA",                         "Standard GEA"),
-    ("src.algos.ga.ImprovedGA",                           "Improved GA"),
-    ("src.algos.gea_scenario.ImprovedGEAScenario1",       "GEA-S1"),
-    ("src.algos.gea_scenario.StandardGEAScenario1",       "Standard GEA-S1"),
-    ("src.algos.gea_scenario.ImprovedGEAScenario2",       "GEA-S2"),
-    ("src.algos.gea_scenario.StandardGEAScenario2",       "Standard GEA-S2"),
-    ("src.algos.gea_scenario.ImprovedGEAScenario3",       "GEA-S3"),
-    ("src.algos.gea_scenario.StandardGEAScenario3",       "Standard GEA-S3"),
-    ("src.algos.adaptive_gea.ImprovedAdaptiveGEA",       "Adaptive GEA"),
-    ("src.algos.adaptive_gea.StandardAdaptiveGEA",       "Standard Adaptive GEA"),
-    ("src.algos.adaptive_gea_scenario.ImprovedAdaptiveGEAScenario1", "Adaptive GEA-S1"),
-    ("src.algos.adaptive_gea_scenario.StandardAdaptiveGEAScenario1", "Standard Adaptive GEA-S1"),
-    ("src.algos.adaptive_gea_scenario.ImprovedAdaptiveGEAScenario2", "Adaptive GEA-S2"),
-    ("src.algos.adaptive_gea_scenario.StandardAdaptiveGEAScenario2", "Standard Adaptive GEA-S2"),
-    ("src.algos.adaptive_gea_scenario.ImprovedAdaptiveGEAScenario3", "Adaptive GEA-S3"),
-    ("src.algos.adaptive_gea_scenario.StandardAdaptiveGEAScenario3", "Standard Adaptive GEA-S3"),
-    ("src.algos.ga_hybrid_gapso.HybridGAPSO", "GA+PSO"),
-    ("src.algos.ga_hybrid_gasa.HybridGASA",   "GA+SA"),
-    ("src.algos.adaptive.ImprovedAdaptiveGA",             "Adaptive GA"),
-    ("src.algos.adaptive.StandardAdaptiveGA",             "Standard Adaptive GA"),
+    ("src.algos.ga.StandardGA", "Standard GA"),
+    ("src.algos.ga.ImprovedGA", "GA"),
+    ("src.algos.gea.ImprovedGEA", "GEA"),
+    ("src.algos.gea.StandardGEA", "Standard GEA"),
+    ("src.algos.gea.ImprovedGEAScenario1", "GEA-S1"),
+    ("src.algos.gea.StandardGEAScenario1", "Standard GEA-S1"),
+    ("src.algos.gea.ImprovedGEAScenario2", "GEA-S2"),
+    ("src.algos.gea.StandardGEAScenario2", "Standard GEA-S2"),
+    ("src.algos.gea.ImprovedGEAScenario3", "GEA-S3"),
+    ("src.algos.gea.StandardGEAScenario3", "Standard GEA-S3"),
+    ("src.algos.adaptive.ImprovedAdaptiveGA", "Adaptive GA"),
+    ("src.algos.adaptive.StandardAdaptiveGA", "Standard Adaptive GA"),
+    ("src.algos.adaptive.ImprovedAdaptiveGEA", "Adaptive GEA"),
+    ("src.algos.adaptive.StandardAdaptiveGEA", "Standard Adaptive GEA"),
+    ("src.algos.adaptive.ImprovedAdaptiveGEAScenario1", "Adaptive GEA-S1"),
+    ("src.algos.adaptive.StandardAdaptiveGEAScenario1", "Standard Adaptive GEA-S1"),
+    ("src.algos.adaptive.ImprovedAdaptiveGEAScenario2", "Adaptive GEA-S2"),
+    ("src.algos.adaptive.StandardAdaptiveGEAScenario2", "Standard Adaptive GEA-S2"),
+    ("src.algos.adaptive.ImprovedAdaptiveGEAScenario3", "Adaptive GEA-S3"),
+    ("src.algos.adaptive.StandardAdaptiveGEAScenario3", "Standard Adaptive GEA-S3"),
+    ("src.algos.sa.ImprovedSA", "SA"),
+    ("src.algos.sa.StandardSA", "Standard SA"),
+    ("src.algos.pso.ImprovedParticleSwarm", "PSO"),
+    ("src.algos.pso.StandardParticleSwarm", "Standard PSO"),
+    ("src.algos.hybrid.ImprovedHybridGAPSO", "GA+PSO"),
+    ("src.algos.hybrid.StandardHybridGAPSO", "Standard GA+PSO"),
+    ("src.algos.hybrid.ImprovedHybridGASA", "GA+SA"),
+    ("src.algos.hybrid.StandardHybridGASA", "Standard GA+SA"),
 ]
 ALGO_ORDER = [algo_label(t) for t, _ in ALGOS]
 ALGO_DISPLAY = {algo_label(t): name for t, name in ALGOS}
@@ -63,6 +67,7 @@ def load_dataset_order() -> list[str]:
         if stripped.startswith("- "):
             names.append(stripped[2:])
     return names
+
 
 # Datasets that have a known optimal (for OG computation)
 KNOWN_OPTIMAL: dict[str, float] = {
@@ -116,29 +121,27 @@ def build_html(data: dict[str, dict[str, dict]], output: Path) -> None:
 
     # ---------- pre-compute best-mean and best-min per dataset ----------
     best_mean: dict[str, float] = {}
-    best_min:  dict[str, float] = {}
+    best_min: dict[str, float] = {}
     for ds in present_datasets:
         means = [
             (_get_stats(data[a][ds], "results") or {}).get("mean")
-            for a in present_algos if ds in data[a]
+            for a in present_algos
+            if ds in data[a]
         ]
         mins = [
             (_get_stats(data[a][ds], "results") or {}).get("min")
-            for a in present_algos if ds in data[a]
+            for a in present_algos
+            if ds in data[a]
         ]
         means = [m for m in means if m is not None]
-        mins  = [m for m in mins  if m is not None]
+        mins = [m for m in mins if m is not None]
         best_mean[ds] = min(means) if means else float("inf")
-        best_min[ds]  = min(mins)  if mins  else float("inf")
+        best_min[ds] = min(mins) if mins else float("inf")
 
     # ---------- HTML generation ----------
-    algo_headers = "".join(
-        f'<th colspan="4">{ALGO_DISPLAY.get(a, a)}</th>'
-        for a in present_algos
-    )
+    algo_headers = "".join(f'<th colspan="4">{ALGO_DISPLAY.get(a, a)}</th>' for a in present_algos)
     sub_headers = "".join(
-        "<th>Mean ± Std</th><th>Best</th><th>Hit(s)</th><th>NFE</th>"
-        for _ in present_algos
+        "<th>Mean ± Std</th><th>Best</th><th>Hit(s)</th><th>NFE</th>" for _ in present_algos
     )
 
     rows_html = ""
@@ -149,27 +152,24 @@ def build_html(data: dict[str, dict[str, dict]], output: Path) -> None:
                 cells += '<td colspan="4" class="missing">—</td>'
                 continue
             rec = data[algo][ds]
-            r   = _get_stats(rec, "results") or {}
-            ht  = _get_stats(rec, "hitting_time") or {}
+            r = _get_stats(rec, "results") or {}
+            ht = _get_stats(rec, "hitting_time") or {}
             nfe = _get_stats(rec, "nfe") or {}
             errs = rec.get("errors", 0)
 
             mean_ = r.get("mean")
-            std_  = r.get("std")
-            min_  = r.get("min")
-            hit_  = ht.get("mean")
-            nfe_  = nfe.get("mean")
+            std_ = r.get("std")
+            min_ = r.get("min")
+            hit_ = ht.get("mean")
+            nfe_ = nfe.get("mean")
 
             is_best_mean = mean_ is not None and abs(mean_ - best_mean[ds]) < 1e-3
-            is_best_min  = min_  is not None and abs(min_  - best_min[ds])  < 1e-3
+            is_best_min = min_ is not None and abs(min_ - best_min[ds]) < 1e-3
 
-            mean_str = (
-                f"{_fmt(mean_)} ± {_fmt(std_)}"
-                if mean_ is not None and std_ is not None else "—"
-            )
-            min_str  = _fmt(min_) if min_ is not None else "—"
-            hit_str  = _fmt(hit_, 1) if hit_ is not None else "—"
-            nfe_str  = _fmt(nfe_) if nfe_ is not None else "—"
+            mean_str = f"{_fmt(mean_)} ± {_fmt(std_)}" if mean_ is not None and std_ is not None else "—"
+            min_str = _fmt(min_) if min_ is not None else "—"
+            hit_str = _fmt(hit_, 1) if hit_ is not None else "—"
+            nfe_str = _fmt(nfe_) if nfe_ is not None else "—"
 
             err_badge = f' <span class="err">({errs}✗)</span>' if errs else ""
 

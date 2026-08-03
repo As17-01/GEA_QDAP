@@ -8,7 +8,7 @@ run:
   output_file: results/standard_adaptive_gea_scenario_1.json
 
 ga:
-  _target_: src.algos.adaptive_gea_scenario.StandardAdaptiveGEAScenario1
+  _target_: src.algos.adaptive.StandardAdaptiveGEAScenario1
   population_size: 350
   iterations: 1000
   crossover_rate: 0.7792025678325523
