@@ -20,6 +20,7 @@ source activate gea_gqap_v2_env
 ALGORITHMS=(
     standard
     gea
+    standard_gea
     improved_ga
     adaptive
     sa
@@ -27,8 +28,11 @@ ALGORITHMS=(
     hybrid_ga_pso
     hybrid_ga_sa
     gea_scenario_1
+    standard_gea_scenario_1
     gea_scenario_2
+    standard_gea_scenario_2
     gea_scenario_3
+    standard_gea_scenario_3
     adaptive_gea
     adaptive_gea_scenario_1
     adaptive_gea_scenario_2

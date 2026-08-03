@@ -5,8 +5,11 @@ defaults:
   - hydra: common
   - _self_
 
+run:
+  output_file: results/gea.json
+
 ga:
-  _target_: src.algos.ga_gea.GEA
+  _target_: src.algos.gea.ImprovedGEA
   population_size: 350
   iterations: 1000
   crossover_rate: 0.8924590155953668

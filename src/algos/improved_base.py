@@ -279,6 +279,40 @@ class ImprovedBase(AlgorithmBase):
             if polished_perm is not ind.permutation and not np.array_equal(polished_perm, ind.permutation):
                 self.population[idx] = evaluate_permutation(polished_perm, self.model)
 
+    def run_gea_generation(
+        self,
+        crossover_rate: float,
+        mutation_rate: float,
+        *,
+        rc_rate: float = 0.0,
+        dm_rate: float = 0.0,
+        injection_rate: float = 0.0,
+    ) -> None:
+        """One improved-family GEA generation with fixed-count operator pools."""
+        probs = self.compute_selection_probabilities()
+
+        ncrossover = int(2 * round((crossover_rate * self.population_size) / 2))
+        nmutation = int(math.floor(mutation_rate * self.population_size))
+
+        offspring = [child for child, _ in self.crossover(probs, ncrossover)]
+        mutations = [child for child, _ in self.mutate(nmutation)]
+
+        extras: List[Individual] = []
+        if rc_rate > 0:
+            n_rc = int(math.floor(rc_rate * self.population_size))
+            extras += [child for child, _ in self._robust_chromosome_crossover(probs, n_rc)]
+        if dm_rate > 0:
+            n_dm = int(math.floor(dm_rate * self.population_size))
+            extras += [child for child, _ in self._directed_mutation(n_dm)]
+        if injection_rate > 0:
+            n_gi = int(math.floor(injection_rate * self.population_size))
+            extras += [child for child, _ in self._gene_injection(n_gi)]
+
+        immigrants = self.maybe_generate_immigrants()
+
+        pool = self.population + offspring + mutations + extras + immigrants
+        self.select_from_pool(pool)
+
     def run_crossover_mutation_generation(
         self,
         crossover_rate: float,
@@ -287,17 +321,15 @@ class ImprovedBase(AlgorithmBase):
         extra_individuals: List[Individual] | None = None,
     ) -> None:
         """One improved-family generation of standard crossover + mutation (+ optional extras)."""
-        probs = self.compute_selection_probabilities()
-
-        ncrossover = int(2 * round((crossover_rate * self.population_size) / 2))
-        nmutation = int(math.floor(mutation_rate * self.population_size))
-
-        offspring = [child for child, _ in self.crossover(probs, ncrossover)]
-        mutations = [child for child, _ in self.mutate(nmutation)]
-        immigrants = self.maybe_generate_immigrants()
-
-        pool = self.population + offspring + mutations
         if extra_individuals:
-            pool += extra_individuals
-        pool += immigrants
-        self.select_from_pool(pool)
+            probs = self.compute_selection_probabilities()
+            ncrossover = int(2 * round((crossover_rate * self.population_size) / 2))
+            nmutation = int(math.floor(mutation_rate * self.population_size))
+            offspring = [child for child, _ in self.crossover(probs, ncrossover)]
+            mutations = [child for child, _ in self.mutate(nmutation)]
+            immigrants = self.maybe_generate_immigrants()
+            pool = self.population + offspring + mutations + extra_individuals + immigrants
+            self.select_from_pool(pool)
+            return
+
+        self.run_gea_generation(crossover_rate, mutation_rate)

@@ -34,8 +34,10 @@ def main(cfg: DictConfig) -> None:
 
     base_ga_cfg = OmegaConf.to_container(cfg.ga, resolve=True)
     algo_class = base_ga_cfg["_target_"].rsplit(".", 1)[-1]
-    if algo_class != "GEA":
-        raise SystemExit(f"tune_components.py only tunes GEA, got {algo_class} -- run with ga=gea's defaults intact")
+    if algo_class != "ImprovedGEA":
+        raise SystemExit(
+            f"tune_components.py only tunes ImprovedGEA, got {algo_class} -- run with ga=gea's defaults intact"
+        )
 
     algorithm_params = {
         k: base_ga_cfg[k] for k in ("population_size", "iterations", "crossover_rate", "mutation_rate")

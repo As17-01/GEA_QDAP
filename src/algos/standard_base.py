@@ -3,8 +3,8 @@ import numpy as np
 from src.algos.base import AlgorithmBase
 from src.costs import evaluate_permutation_delta_batch
 from src.data.models import Individual
-from src.operators.crossover import choose_crossover
-from src.operators.mutations import choose_mutation
+from src.operators.crossover import choose_crossover, crossover_robust_chromosome
+from src.operators.mutations import choose_mutation, mutation_greedy_reassign, mutation_random
 from src.repair import GreedyRepair
 
 
@@ -50,13 +50,17 @@ class StandardBase(AlgorithmBase):
                 offspring[slot] = elite
         self.population = offspring
 
-    def run_crossover_mutation_generational(
+    def run_gea_generational(
         self,
         crossover_rate: float,
         mutation_rate: float,
         elitism_count: int,
+        *,
+        rc_rate: float = 0.0,
+        dm_rate: float = 0.0,
+        injection_rate: float = 0.0,
     ) -> None:
-        """One standard-family generation of crossover + mutation with generational replacement."""
+        """One standard-family GEA generation: probabilistic crossover/mutation/scenario ops."""
         n = self.population_size
         num_pairs = n // 2 + (n % 2)
         parent_idx = self._fitness_parent_indices(2 * num_pairs)
@@ -78,6 +82,9 @@ class StandardBase(AlgorithmBase):
             if np.random.random() < mutation_rate:
                 child2 = choose_mutation(child2, self.model)
 
+            child1, base1 = self._apply_scenario_operators(child1, base1, p1, p2, rc_rate, dm_rate, injection_rate)
+            child2, base2 = self._apply_scenario_operators(child2, base2, p1, p2, rc_rate, dm_rate, injection_rate)
+
             raw_perms.append(child1)
             baselines.append(base1)
             raw_perms.append(child2)
@@ -91,3 +98,21 @@ class StandardBase(AlgorithmBase):
         self.logger.record_nfe(len(raw_perms))
 
         self._replace_with_elitism(list(offspring), elitism_count)
+
+    def _apply_scenario_operators(self, child, base, p1, p2, rc_rate, dm_rate, injection_rate):
+        if rc_rate > 0 and np.random.random() < rc_rate:
+            (child, base), _ = crossover_robust_chromosome(p1, p2, self.model)
+        if dm_rate > 0 and np.random.random() < dm_rate:
+            child = mutation_greedy_reassign(child, self.model)
+        if injection_rate > 0 and np.random.random() < injection_rate:
+            child = mutation_random(child, self.model)
+        return child, base
+
+    def run_crossover_mutation_generational(
+        self,
+        crossover_rate: float,
+        mutation_rate: float,
+        elitism_count: int,
+    ) -> None:
+        """One standard-family generation of crossover + mutation with generational replacement."""
+        self.run_gea_generational(crossover_rate, mutation_rate, elitism_count)
