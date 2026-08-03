@@ -17,7 +17,7 @@ the tuning and experimental procedures.
 | Path | Contents |
 |---|---|
 | `core/base.py` | `AlgorithmBase` — shared init, run loop, repair wrapper |
-| `core/standard_base.py` | `StandardBase` — fitness selection, generational replacement |
+| `core/standard_base.py` | `StandardBase` — thesis scaffold: heuristic2 init, pool selection |
 | `core/improved_base.py` | `ImprovedBase` — diversity selection, pool replacement, RC/DM/GI helpers, memetic polish |
 | `core/logger.py` | `GALogger` — iteration timing, NFE, operator stats |
 | `mixins/adaptive.py` | `AdaptiveRatesMixin` — lambda-scaled operator counts |
@@ -38,15 +38,17 @@ the tuning and experimental procedures.
 
 | Feature | Standard family (`StandardBase`) | Improved family (`ImprovedBase`) |
 |---|---|---|
-| Parent selection | Fitness-proportionate roulette | Diversity-weighted roulette (`DiversitySelector`) |
-| Survivor selection | Generational replacement + elitism | Elite + diversity/cost pool selection |
-| Repair default | `GreedyRepair` | `RFRepair` |
+| Parent selection | Exponential roulette `exp(-β·cost/worst)` | Diversity-weighted roulette (`DiversitySelector`) |
+| Init | `heuristic2` + mutation fill | Random permutations + `RFRepair` |
+| Survivor selection | (μ+λ) pool merge, top N | Elite + diversity/cost pool selection |
+| Repair on offspring | None (`IdentityRepair`) | `RFRepair` |
 | Stagnation immigrants | No | Yes (`stagnation_limit`, `immigrant_rate`) |
 | Memetic local search | No | Yes (top-3 elites, disabled when `J > 50`) |
-| Operator batching | Probabilistic rates → fixed counts per generation | Fixed-count pools per generation |
+| Operator batching | Fixed counts per generation | Fixed-count pools per generation |
+| Scenario ops (standard GEA) | Thesis `analyze_perm` / mask / combine | RC / DM / GI operator batches |
 
-Standard configs use tuned operator rates copied from their improved counterpart plus
-`elitism_count: 5` where applicable. Improved configs are Optuna-tuned and may include
+Standard configs use tuned operator rates copied from their improved counterpart.
+Improved configs are Optuna-tuned and may include
 `components@ga` (repair/selector overrides) in Hydra defaults.
 
 ### Config catalog
@@ -183,20 +185,14 @@ seconds) or `iterations` is reached.
 
 ### `StandardGA` (config: `standard`)
 
-The textbook simple genetic algorithm on the Holland scaffold:
+The textbook simple genetic algorithm on the thesis scaffold:
 
-- **Selection**: plain fitness-proportionate (roulette wheel) selection on raw cost
-  (`fitness = 1 / (cost + ε)`) — no diversity weighting.
-- **Crossover**: one operator chosen uniformly at random from the four operators above
-  (`choose_crossover`), applied with probability `crossover_rate` per mating pair;
-  otherwise the pair passes through unchanged.
-- **Mutation**: with probability `mutation_rate`, one operator chosen uniformly at
-  random from the nine operators above is applied to the individual as a whole — no
-  per-gene iteration.
-- **Replacement**: full generational replacement with single-individual elitism
-  (`elitism_count`, default `1`) so the best solution is never lost to randomness.
-- No diversity selection, no `RFRepair` (uses deterministic `GreedyRepair`), no
-  stagnation immigrants, no memetic local search.
+- **Init**: `heuristic2` seed, population filled by mutating the seed (upstream style).
+- **Selection**: exponential roulette on cost (`exp(-β·cost/worst_cost)`).
+- **Crossover / mutation**: fixed batch counts `ncrossover`, `nmutation` per generation;
+  one crossover/mutation operator chosen uniformly at random from the project operator set.
+- **Replacement**: (μ+λ) pool — parents + offspring merged, best N kept.
+- No offspring repair, no diversity selection, no stagnation immigrants, no memetic polish.
 
 This is the literal baseline the improved variants are compared against.
 
@@ -241,9 +237,8 @@ picks the next generation. Additional enhancements:
 ### `StandardGEA` (config: `standard_gea`)
 
 Same five operator stages and rates as `ImprovedGEA`, but on the **Holland scaffold**:
-fitness-proportionate parent selection, probabilistic operators, generational replacement
-with `elitism_count: 5`, and `GreedyRepair`. No diversity selection, immigrants, or
-memetic polish.
+exponential parent selection, fixed-batch operators, pool survivor selection, and thesis
+scenario batches where enabled. No offspring repair, immigrants, or memetic polish.
 
 > **Design notes:** `ImprovedGA` is the improved-family baseline with only stages 1–2 (no RC/DM/GI).
 > `ImprovedGEAScenario{1,2,3}` are **single-enhancement ablations** of the full `ImprovedGEA` —
@@ -273,8 +268,7 @@ not used.
 
 ### `StandardAdaptiveGA` (config: `standard_adaptive`)
 
-Same lambda-adaptive crossover/mutation on the **Holland scaffold** with generational
-replacement and `elitism_count: 5`.
+Same lambda-adaptive crossover/mutation on the thesis scaffold with pool survivor selection.
 
 ### Adaptive rate mechanism
 
@@ -319,7 +313,7 @@ no immigrants.
 
 ### `StandardSA` (config: `standard_sa`)
 
-Same Metropolis annealing loop with `GreedyRepair` and no memetic polish.
+Same Metropolis annealing loop on the thesis scaffold (`heuristic2` init, no offspring repair).
 
 > **Design notes:** A population-based multi-walker SA would share a temperature
 schedule across independent chains with no selection pressure between them — this
@@ -361,7 +355,7 @@ Uses `ImprovedBase` + `PSOMixin`: `RFRepair`, stagnation immigrants, memetic pol
 
 ### `StandardParticleSwarm` (config: `standard_pso`)
 
-Same velocity PSO on `AlgorithmBase` + `PSOMixin` with `GreedyRepair` and no immigrants.
+Same velocity PSO on `StandardBase` + `PSOMixin` with `heuristic2` init and no offspring repair.
 
 Particle identity (`self.particles` / `self.personal_best` / `self.velocities`) is
 maintained separately from `self.population`'s ordering, since `AlgorithmBase.run()` re-sorts
@@ -419,8 +413,7 @@ plain elitist GA.
 
 > **Design notes:** This hybrid retains a population-based structure (unlike standalone
 > SA, §5). `ImprovedHybridGASA` filters offspring through Metropolis acceptance then
-> pool selection; `StandardHybridGASA` does the same then generational replacement with
-> `elitism_count: 5`.
+> pool selection; `StandardHybridGASA` uses the same Metropolis filter on the thesis scaffold.
 
 ---
 
@@ -586,12 +579,11 @@ poetry run python scripts/tune_algorithm.py --config-name="tune_algorithm/gea"
 ### Algorithms in scope for tuning
 
 Improved configs are Optuna-tuned; each has a matching `standard_*` config whose operator
-rates are copied from the tuned improved counterpart (plus `elitism_count: 5` on the
-Holland scaffold).
+rates are copied from the tuned improved counterpart.
 
 | Config | Key tunable parameters |
 |---|---|
-| `standard` / `ga` | `crossover_rate`, `mutation_rate`, (`elitism_count` on standard) |
+| `standard` / `ga` | `crossover_rate`, `mutation_rate` |
 | `standard_gea` / `gea` | `crossover_rate`, `mutation_rate`, `rc_rate`, `dm_rate`, `injection_rate`, `stagnation_limit`, `immigrant_rate` |
 | `standard_adaptive` / `adaptive` | `crossover_rate`, `mutation_rate`, `alpha`, `lambda_min`, `lambda_max`, `stagnation_limit`, `immigrant_rate` |
 | `standard_sa` / `sa` | `initial_temperature`, `cooling_rate`, `min_temperature` |

@@ -16,5 +16,4 @@ ga:
   rc_rate: 0.497567687055932
   dm_rate: 0.10150148905202014
   injection_rate: 0.29474678416214284
-  elitism_count: 5
   verbose: false

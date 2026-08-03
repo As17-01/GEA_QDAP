@@ -49,8 +49,8 @@ class StandardHybridGAPSO(StandardBase, PSOMixin):
 
         ncrossover = int(2 * round((self.crossover_rate * n) / 2))
         nmutation = int(math.floor(self.mutation_rate * n))
-        offspring = [child for child, _ in self._standard_crossover_batch(ncrossover)]
-        mutations = [child for child, _ in self._standard_mutate_batch(nmutation)]
+        offspring = [child for child, _ in self._standard_crossover_pairs(ncrossover)]
+        mutations = [child for child, _ in self._standard_mutate_pairs(nmutation)]
 
         pool = self.population + offspring + mutations
         selected = sorted(pool, key=lambda x: x.cost)[:n]

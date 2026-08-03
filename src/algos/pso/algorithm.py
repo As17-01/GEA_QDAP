@@ -1,11 +1,10 @@
-from src.algos.core.base import AlgorithmBase
 from src.algos.core.improved_base import ImprovedBase
+from src.algos.core.standard_base import StandardBase
 from src.algos.mixins.pso import PSOMixin
-from src.repair import GreedyRepair
 
 
-class StandardParticleSwarm(AlgorithmBase, PSOMixin):
-    """Discrete PSO with greedy repair and no stagnation immigrants."""
+class StandardParticleSwarm(StandardBase, PSOMixin):
+    """Discrete PSO on the thesis scaffold (heuristic2 init, no offspring repair)."""
 
     def __init__(
         self,
@@ -23,7 +22,7 @@ class StandardParticleSwarm(AlgorithmBase, PSOMixin):
             model,
             population_size,
             iterations,
-            repair_class=repair_class if repair_class is not None else GreedyRepair(),
+            repair_class=repair_class,
             verbose=verbose,
         )
         self.w = inertia_weight

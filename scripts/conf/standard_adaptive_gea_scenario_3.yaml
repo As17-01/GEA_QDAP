@@ -18,5 +18,4 @@ ga:
   lambda_min: 0.25917668448044195
   lambda_max: 1.6090662195411438
   epsilon: 1e-5
-  elitism_count: 5
   verbose: false

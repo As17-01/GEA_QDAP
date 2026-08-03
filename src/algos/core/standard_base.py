@@ -3,17 +3,25 @@ import math
 import numpy as np
 
 from src.algos.core.base import AlgorithmBase
-from src.costs import evaluate_permutation, evaluate_permutation_delta_batch
+from src.costs import evaluate_permutation
 from src.data.models import Individual
 from src.heuristics.heuristic2 import heuristic2
-from src.operators.crossover import choose_crossover, crossover_robust_chromosome
-from src.operators.mutations import choose_mutation, mutation_greedy_reassign, mutation_random
-from src.repair import GreedyRepair
+from src.operators.crossover import choose_crossover
+from src.operators.mutations import choose_mutation
+from src.operators.thesis_scenario import analyze_perm, combine_q, mask_mutation
+from src.repair import IdentityRepair
 
 
 class StandardBase(AlgorithmBase):
     """Thesis-style standard scaffold: heuristic2 initialization, exponential parent
-    selection, probabilistic crossover/mutation, and (mu+lambda) pool survivor selection."""
+    selection, fixed-batch crossover/mutation, thesis scenario operators, and pool
+    survivor selection. Offspring are evaluated without post-operator repair."""
+
+    p_fixed_x: float = 0.9
+    p_scenario1: float = 0.3
+    p_scenario2: float = 0.3
+    p_scenario3: float = 0.5
+    mask_mutation_index: int = 2
 
     def __init__(
         self,
@@ -28,7 +36,7 @@ class StandardBase(AlgorithmBase):
             model,
             population_size,
             iterations,
-            repair_class=repair_class if repair_class is not None else GreedyRepair(),
+            repair_class=repair_class if repair_class is not None else IdentityRepair(),
             verbose=verbose,
         )
         self.selection_beta = selection_beta
@@ -60,13 +68,11 @@ class StandardBase(AlgorithmBase):
             self.worst_cost = self.population[-1].cost
 
     def _pool_replace(self, newcomers: list[Individual]) -> None:
-        """(mu+lambda) survivor selection: merge parents with offspring, keep best N."""
         pool = self.population + newcomers
         pool.sort(key=lambda x: x.cost)
         self.population = pool[: self.population_size]
 
     def _parent_selection_indices(self, n: int) -> np.ndarray:
-        """Roulette wheel with exp(-beta * cost / worst_cost), matching upstream run_ga."""
         costs = np.array([ind.cost for ind in self.population], dtype=float)
         worst = self.worst_cost
         if not math.isfinite(worst) or worst <= 0:
@@ -83,188 +89,231 @@ class StandardBase(AlgorithmBase):
         draws = np.random.random(size=n)
         return np.minimum(np.searchsorted(cumsum, draws, side="right"), len(probs) - 1)
 
-    def _standard_crossover_batch(self, n: int) -> list[tuple[Individual, Individual]]:
+    def _selection_probabilities(self) -> np.ndarray:
+        costs = np.array([ind.cost for ind in self.population], dtype=float)
+        worst = self.worst_cost
+        if not math.isfinite(worst) or worst <= 0:
+            worst = float(np.max(costs[np.isfinite(costs)])) if np.any(np.isfinite(costs)) else 1.0
+        weights = np.zeros_like(costs)
+        finite = np.isfinite(costs)
+        weights[finite] = np.exp(-self.selection_beta * costs[finite] / worst)
+        total = weights.sum()
+        return weights / total if total > 0 else np.full(len(costs), 1.0 / len(costs))
+
+    def _standard_crossover_pairs(self, n: int) -> list[tuple[Individual, Individual]]:
         n = n - (n % 2)
         num_pairs = n // 2
         if not num_pairs:
             return []
 
         parent_idx = self._parent_selection_indices(2 * num_pairs)
-        raw_perms = []
-        baselines = []
+        pairs: list[tuple[Individual, Individual]] = []
         for k in range(num_pairs):
             i1, i2 = parent_idx[2 * k], parent_idx[2 * k + 1]
             p1, p2 = self.population[i1], self.population[i2]
-            (child1, base1), (child2, base2) = choose_crossover((p1, p2), self.model)
-            raw_perms.extend((child1, child2))
-            baselines.extend((base1, base2))
+            (child1, _), (child2, _) = choose_crossover((p1, p2), self.model)
+            ind1 = evaluate_permutation(child1, self.model)
+            ind2 = evaluate_permutation(child2, self.model)
+            self.logger.record_nfe(2)
+            if math.isfinite(ind1.cost):
+                pairs.append((ind1, p1))
+            if math.isfinite(ind2.cost):
+                pairs.append((ind2, p2))
+        return pairs
 
-        repaired = self.repair_batch_wrapper(np.array(raw_perms))
-        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
-        self.logger.record_nfe(len(raw_perms))
-        return list(zip(children, baselines))
-
-    def _standard_mutate_batch(self, n: int) -> list[tuple[Individual, Individual]]:
+    def _standard_mutate_pairs(self, n: int) -> list[tuple[Individual, Individual]]:
         if n <= 0:
             return []
 
         indices = np.random.randint(0, len(self.population), size=n)
-        baselines = [self.population[idx] for idx in indices]
-        raw_perms = np.array([choose_mutation(b.permutation, self.model) for b in baselines])
-        repaired = self.repair_batch_wrapper(raw_perms)
-        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
-        self.logger.record_nfe(n)
-        return list(zip(children, baselines))
+        pairs: list[tuple[Individual, Individual]] = []
+        for idx in indices:
+            baseline = self.population[idx]
+            mutated_perm = choose_mutation(baseline.permutation, self.model)
+            child = evaluate_permutation(mutated_perm, self.model)
+            self.logger.record_nfe(1)
+            if math.isfinite(child.cost):
+                pairs.append((child, baseline))
+        return pairs
 
-    def _standard_rc_crossover_batch(self, n: int) -> list[tuple[Individual, Individual]]:
-        n = n - (n % 2)
-        num_pairs = n // 2
-        if not num_pairs:
-            return []
-
-        parent_idx = self._parent_selection_indices(2 * num_pairs)
-        raw_perms = []
-        baselines = []
-        for k in range(num_pairs):
-            i1, i2 = parent_idx[2 * k], parent_idx[2 * k + 1]
-            p1, p2 = self.population[i1], self.population[i2]
-            (child1, base1), (child2, base2) = crossover_robust_chromosome(p1, p2, self.model)
-            raw_perms.extend((child1, child2))
-            baselines.extend((base1, base2))
-
-        repaired = self.repair_batch_wrapper(np.array(raw_perms))
-        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
-        self.logger.record_nfe(len(raw_perms))
-        return list(zip(children, baselines))
-
-    def _standard_directed_mutation_batch(self, n: int) -> list[tuple[Individual, Individual]]:
+    def _thesis_scenario1_pairs(self, n: int) -> list[tuple[Individual, Individual]]:
         if n <= 0:
             return []
 
-        indices = np.random.randint(0, len(self.population), size=n)
-        baselines = [self.population[idx] for idx in indices]
-        raw_perms = np.array([mutation_greedy_reassign(b.permutation, self.model) for b in baselines])
-        repaired = self.repair_batch_wrapper(raw_perms)
-        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
-        self.logger.record_nfe(n)
-        return list(zip(children, baselines))
+        n_pop = len(self.population)
+        p_count = min(max(1, int(self.p_scenario1 * self.population_size)), n_pop)
+        if p_count < 2:
+            return []
 
-    def _standard_gene_injection_batch(self, n: int) -> list[tuple[Individual, Individual]]:
+        _, _, dominant_individual, _ = analyze_perm(
+            self.population[:p_count],
+            p_fixed_x=self.p_fixed_x,
+            model=self.model,
+        )
+        self.logger.record_nfe(1)
+
+        probs = self._selection_probabilities()
+        pairs: list[tuple[Individual, Individual]] = []
+        for _ in range(n):
+            idx = int(np.searchsorted(np.cumsum(probs), np.random.random(), side="right"))
+            idx = min(idx, n_pop - 1)
+            partner = self.population[idx]
+            (child1, _), (child2, _) = choose_crossover((dominant_individual, partner), self.model)
+            for child_perm, baseline in ((child1, partner), (child2, partner)):
+                child = evaluate_permutation(child_perm, self.model)
+                self.logger.record_nfe(1)
+                if math.isfinite(child.cost):
+                    pairs.append((child, baseline))
+        return pairs
+
+    def _thesis_scenario2_pairs(self, n: int) -> list[tuple[Individual, Individual]]:
         if n <= 0:
             return []
 
-        indices = np.random.randint(0, len(self.population), size=n)
-        baselines = [self.population[idx] for idx in indices]
-        raw_perms = np.array([mutation_random(b.permutation, self.model) for b in baselines])
-        repaired = self.repair_batch_wrapper(raw_perms)
-        children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
-        self.logger.record_nfe(n)
-        return list(zip(children, baselines))
+        n_pop = len(self.population)
+        p_count = min(max(1, int(self.p_scenario2 * self.population_size)), n_pop)
+        if p_count < 1:
+            return []
 
-    def _finalize_adaptive_offspring(self, candidates: list[Individual], elitism_count: int) -> None:
-        del elitism_count  # kept for config/API compatibility; pool selection ignores elitism
+        _, mask_matrix, _, _ = analyze_perm(
+            self.population[:p_count],
+            p_fixed_x=self.p_fixed_x,
+            model=self.model,
+        )
+        self.logger.record_nfe(1)
+        mask_slice = mask_matrix[:p_count]
+
+        pairs: list[tuple[Individual, Individual]] = []
+        for _ in range(n):
+            ii = int(np.random.randint(0, p_count))
+            baseline = self.population[ii]
+            mutated_perm = mask_mutation(
+                self.mask_mutation_index,
+                baseline.permutation,
+                mask_slice[ii],
+                self.model,
+            )
+            child = evaluate_permutation(mutated_perm, self.model)
+            self.logger.record_nfe(1)
+            if math.isfinite(child.cost):
+                pairs.append((child, baseline))
+        return pairs
+
+    def _thesis_scenario3_pairs(self, n: int) -> list[tuple[Individual, Individual]]:
+        if n <= 0:
+            return []
+
+        n_pop = len(self.population)
+        p_count = min(max(1, int(self.p_scenario3 * self.population_size)), n_pop)
+        if p_count < 1:
+            return []
+
+        _, _, dominant_individual, dominant_mask = analyze_perm(
+            self.population[:p_count],
+            p_fixed_x=self.p_fixed_x,
+            model=self.model,
+        )
+        self.logger.record_nfe(1)
+
+        tail_indices = np.arange(max(0, n_pop - p_count), n_pop)
+        pairs: list[tuple[Individual, Individual]] = []
+        for _ in range(n):
+            jj = int(np.random.choice(tail_indices))
+            baseline = self.population[jj]
+            combined_perm = combine_q(
+                dominant_individual.permutation,
+                baseline.permutation,
+                dominant_mask,
+            )
+            child = evaluate_permutation(combined_perm, self.model)
+            self.logger.record_nfe(1)
+            if math.isfinite(child.cost):
+                pairs.append((child, baseline))
+        return pairs
+
+    def _scenario_batch_count(self, rate: float) -> int:
+        return int(math.floor(rate * (self.p_scenario3 * self.population_size)))
+
+    def run_batch_generational(
+        self,
+        crossover_rate: float,
+        mutation_rate: float,
+        *,
+        enable_scenario1: bool = False,
+        enable_scenario2: bool = False,
+        enable_scenario3: bool = False,
+        scenario_crossover_rate: float = 0.5,
+        scenario_mutation_rate: float = 0.2,
+        scenario_mutation_rate_3: float | None = None,
+    ) -> None:
+        n = self.population_size
+        ncrossover = int(2 * round((crossover_rate * n) / 2))
+        nmutation = int(math.floor(mutation_rate * n))
+
+        candidates = [child for child, _ in self._standard_crossover_pairs(ncrossover)]
+        candidates += [child for child, _ in self._standard_mutate_pairs(nmutation)]
+
+        if enable_scenario1:
+            n_scenario = self._scenario_batch_count(scenario_crossover_rate)
+            candidates += [child for child, _ in self._thesis_scenario1_pairs(n_scenario)]
+        if enable_scenario2:
+            n_scenario = self._scenario_batch_count(scenario_mutation_rate)
+            candidates += [child for child, _ in self._thesis_scenario2_pairs(n_scenario)]
+        if enable_scenario3:
+            rate3 = scenario_mutation_rate if scenario_mutation_rate_3 is None else scenario_mutation_rate_3
+            n_scenario = self._scenario_batch_count(rate3)
+            candidates += [child for child, _ in self._thesis_scenario3_pairs(n_scenario)]
+
         self._pool_replace(candidates)
 
     def run_adaptive_generational(
         self,
-        elitism_count: int,
         *,
         rc_rate: float = 0.0,
         dm_rate: float = 0.0,
         injection_rate: float = 0.0,
     ) -> None:
-        """One standard-family adaptive generation with lambda-scaled operator counts."""
-        offspring = self._adaptive_apply("base_crossover", "lambda_crossover", self._standard_crossover_batch)
-        mutations = self._adaptive_apply("base_mutation", "lambda_mutation", self._standard_mutate_batch)
+        offspring = self._adaptive_apply("base_crossover", "lambda_crossover", self._standard_crossover_pairs)
+        mutations = self._adaptive_apply("base_mutation", "lambda_mutation", self._standard_mutate_pairs)
         candidates = offspring + mutations
 
         if rc_rate > 0:
-            candidates += self._adaptive_apply("base_rc", "lambda_rc", self._standard_rc_crossover_batch)
+            candidates += self._adaptive_apply("base_rc", "lambda_rc", self._thesis_scenario1_pairs)
         if dm_rate > 0:
-            candidates += self._adaptive_apply("base_dm", "lambda_dm", self._standard_directed_mutation_batch)
+            candidates += self._adaptive_apply("base_dm", "lambda_dm", self._thesis_scenario2_pairs)
         if injection_rate > 0:
-            candidates += self._adaptive_apply("base_gi", "lambda_gi", self._standard_gene_injection_batch)
+            candidates += self._adaptive_apply("base_gi", "lambda_gi", self._thesis_scenario3_pairs)
 
-        self._finalize_adaptive_offspring(candidates, elitism_count)
+        self._pool_replace(candidates)
+
+    def run_crossover_mutation_generational(self, crossover_rate: float, mutation_rate: float) -> None:
+        self.run_batch_generational(crossover_rate, mutation_rate)
 
     def run_gea_generational(
         self,
         crossover_rate: float,
         mutation_rate: float,
-        elitism_count: int,
         *,
         rc_rate: float = 0.0,
         dm_rate: float = 0.0,
         injection_rate: float = 0.0,
     ) -> None:
-        """One standard-family GEA generation: probabilistic crossover/mutation/scenario ops."""
-        n = self.population_size
-        num_pairs = n // 2 + (n % 2)
-        parent_idx = self._parent_selection_indices(2 * num_pairs)
+        self.run_batch_generational(
+            crossover_rate,
+            mutation_rate,
+            enable_scenario1=rc_rate > 0,
+            enable_scenario2=dm_rate > 0,
+            enable_scenario3=injection_rate > 0,
+            scenario_crossover_rate=rc_rate,
+            scenario_mutation_rate=dm_rate,
+            scenario_mutation_rate_3=injection_rate,
+        )
 
-        raw_perms = []
-        baselines = []
-        for k in range(num_pairs):
-            i1, i2 = parent_idx[2 * k], parent_idx[2 * k + 1]
-            p1, p2 = self.population[i1], self.population[i2]
-
-            if np.random.random() < crossover_rate:
-                (child1, base1), (child2, base2) = choose_crossover((p1, p2), self.model)
-            else:
-                child1, base1 = p1.permutation, p1
-                child2, base2 = p2.permutation, p2
-
-            if np.random.random() < mutation_rate:
-                child1 = choose_mutation(child1, self.model)
-            if np.random.random() < mutation_rate:
-                child2 = choose_mutation(child2, self.model)
-
-            child1, base1 = self._apply_scenario_operators(child1, base1, p1, p2, rc_rate, dm_rate, injection_rate)
-            child2, base2 = self._apply_scenario_operators(child2, base2, p1, p2, rc_rate, dm_rate, injection_rate)
-
-            raw_perms.append(child1)
-            baselines.append(base1)
-            raw_perms.append(child2)
-            baselines.append(base2)
-
-        raw_perms = raw_perms[:n]
-        baselines = baselines[:n]
-
-        repaired = self.repair_batch_wrapper(np.array(raw_perms))
-        offspring = evaluate_permutation_delta_batch(baselines, repaired, self.model)
-        self.logger.record_nfe(len(raw_perms))
-
-        self._pool_replace(list(offspring))
-
-    def _apply_scenario_operators(self, child, base, p1, p2, rc_rate, dm_rate, injection_rate):
-        if rc_rate > 0 and np.random.random() < rc_rate:
-            (child, base), _ = crossover_robust_chromosome(p1, p2, self.model)
-        if dm_rate > 0 and np.random.random() < dm_rate:
-            child = mutation_greedy_reassign(child, self.model)
-        if injection_rate > 0 and np.random.random() < injection_rate:
-            child = mutation_random(child, self.model)
-        return child, base
-
-    def run_crossover_mutation_generational(
-        self,
-        crossover_rate: float,
-        mutation_rate: float,
-        elitism_count: int,
-    ) -> None:
-        """One standard-family generation of crossover + mutation with pool survivor selection."""
-        self.run_gea_generational(crossover_rate, mutation_rate, elitism_count)
-
-    def run_annealing_generational(
-        self,
-        crossover_rate: float,
-        mutation_rate: float,
-        elitism_count: int,
-    ) -> None:
-        """Standard GA offspring filtered by Metropolis acceptance, then pool survivor selection."""
+    def run_annealing_generational(self, crossover_rate: float, mutation_rate: float) -> None:
         ncrossover = int(2 * round((crossover_rate * self.population_size) / 2))
         nmutation = int(math.floor(mutation_rate * self.population_size))
 
-        offspring = self._anneal_accept(self._standard_crossover_batch(ncrossover))
-        mutations = self._anneal_accept(self._standard_mutate_batch(nmutation))
-        self._finalize_adaptive_offspring(offspring + mutations, elitism_count)
+        offspring = self._anneal_accept(self._standard_crossover_pairs(ncrossover))
+        mutations = self._anneal_accept(self._standard_mutate_pairs(nmutation))
+        self._pool_replace(offspring + mutations)
         self._cool_temperature()

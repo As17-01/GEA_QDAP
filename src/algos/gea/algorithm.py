@@ -3,8 +3,7 @@ from src.algos.core.standard_base import StandardBase
 
 
 class StandardGEA(StandardBase):
-    """Full GEA operator set (crossover, mutation, RC, DM, GI) on the Holland scaffold:
-    fitness selection, probabilistic operators, generational replacement with elitism."""
+    """Full GEA operator set on the thesis scaffold with pool survivor selection."""
 
     def __init__(
         self,
@@ -16,7 +15,6 @@ class StandardGEA(StandardBase):
         rc_rate=0.3,
         dm_rate=0.3,
         injection_rate=0.1,
-        elitism_count=1,
         repair_class=None,
         verbose=False,
     ):
@@ -32,13 +30,11 @@ class StandardGEA(StandardBase):
         self.rc_rate = rc_rate
         self.dm_rate = dm_rate
         self.injection_rate = injection_rate
-        self.elitism_count = elitism_count
 
     def step(self) -> None:
         self.run_gea_generational(
             self.crossover_rate,
             self.mutation_rate,
-            self.elitism_count,
             rc_rate=self.rc_rate,
             dm_rate=self.dm_rate,
             injection_rate=self.injection_rate,

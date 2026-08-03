@@ -12,4 +12,3 @@ tune:
   param_space:
     crossover_rate: [0.4, 0.9]
     mutation_rate: [0.001, 0.05]
-    elitism_count: [1, 5]

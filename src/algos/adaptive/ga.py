@@ -4,7 +4,7 @@ from src.algos.core.standard_base import StandardBase
 
 
 class StandardAdaptiveGA(StandardBase, AdaptiveRatesMixin):
-    """Adaptive crossover/mutation on the Holland scaffold with lambda-scaled operator counts."""
+    """Adaptive crossover/mutation on the thesis scaffold with lambda-scaled operator counts."""
 
     def __init__(
         self,
@@ -17,16 +17,14 @@ class StandardAdaptiveGA(StandardBase, AdaptiveRatesMixin):
         lambda_min=0.4,
         lambda_max=1.5,
         epsilon=1e-5,
-        elitism_count=1,
         repair_class=None,
         verbose=False,
     ):
         super().__init__(model, population_size, iterations, repair_class=repair_class, verbose=verbose)
         self._init_adaptive_rates(crossover_rate, mutation_rate, alpha, lambda_min, lambda_max, epsilon)
-        self.elitism_count = elitism_count
 
     def step(self) -> None:
-        self.run_adaptive_generational(self.elitism_count)
+        self.run_adaptive_generational()
 
 
 class ImprovedAdaptiveGA(ImprovedBase, AdaptiveRatesMixin):

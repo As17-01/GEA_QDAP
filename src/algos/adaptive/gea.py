@@ -4,7 +4,7 @@ from src.algos.core.standard_base import StandardBase
 
 
 class StandardAdaptiveGEA(StandardBase, AdaptiveRatesMixin):
-    """Full adaptive GEA (crossover, mutation, RC, DM, GI) on the Holland scaffold."""
+    """Full adaptive GEA on the thesis scaffold."""
 
     def __init__(
         self,
@@ -20,7 +20,6 @@ class StandardAdaptiveGEA(StandardBase, AdaptiveRatesMixin):
         lambda_min=0.4,
         lambda_max=1.5,
         epsilon=1e-5,
-        elitism_count=1,
         repair_class=None,
         verbose=False,
     ):
@@ -29,11 +28,9 @@ class StandardAdaptiveGEA(StandardBase, AdaptiveRatesMixin):
         self._init_adaptive_scenario_rate("base_rc", "lambda_rc", rc_rate)
         self._init_adaptive_scenario_rate("base_dm", "lambda_dm", dm_rate)
         self._init_adaptive_scenario_rate("base_gi", "lambda_gi", injection_rate)
-        self.elitism_count = elitism_count
 
     def step(self) -> None:
         self.run_adaptive_generational(
-            self.elitism_count,
             rc_rate=self.base_rc,
             dm_rate=self.base_dm,
             injection_rate=self.base_gi,

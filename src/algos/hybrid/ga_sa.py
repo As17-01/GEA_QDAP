@@ -4,7 +4,7 @@ from src.algos.core.standard_base import StandardBase
 
 
 class StandardHybridGASA(StandardBase, AnnealingMixin):
-    """Holland-style GA with Metropolis acceptance and generational replacement."""
+    """Thesis-style GA with Metropolis acceptance and pool survivor selection."""
 
     def __init__(
         self,
@@ -13,7 +13,6 @@ class StandardHybridGASA(StandardBase, AnnealingMixin):
         iterations=1000,
         crossover_rate=0.7,
         mutation_rate=0.3,
-        elitism_count=5,
         initial_temperature=50.0,
         cooling_rate=0.97,
         min_temperature=1e-3,
@@ -30,14 +29,9 @@ class StandardHybridGASA(StandardBase, AnnealingMixin):
         self._init_annealing(initial_temperature, cooling_rate, min_temperature)
         self.crossover_rate = crossover_rate
         self.mutation_rate = mutation_rate
-        self.elitism_count = elitism_count
 
     def step(self) -> None:
-        self.run_annealing_generational(
-            self.crossover_rate,
-            self.mutation_rate,
-            self.elitism_count,
-        )
+        self.run_annealing_generational(self.crossover_rate, self.mutation_rate)
 
 
 class ImprovedHybridGASA(ImprovedBase, AnnealingMixin):

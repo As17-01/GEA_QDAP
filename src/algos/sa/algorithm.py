@@ -4,6 +4,7 @@ import numpy as np
 
 from src.algos.mixins.annealing import AnnealingMixin
 from src.algos.core.base import LOCAL_SEARCH_MAX_J, LOCAL_SEARCH_MAX_PASSES, AlgorithmBase
+from src.algos.core.standard_base import StandardBase
 from src.costs import (
     cost_function_perm,
     cost_function_perm_delta,
@@ -11,11 +12,11 @@ from src.costs import (
     evaluate_permutation_delta_batch,
 )
 from src.operators.mutations import choose_mutation
-from src.repair import GreedyRepair, RFRepair
+from src.repair import RFRepair
 
 
-class StandardSA(AlgorithmBase, AnnealingMixin):
-    """Classic single-solution simulated annealing with greedy repair."""
+class StandardSA(StandardBase, AnnealingMixin):
+    """Classic single-solution simulated annealing on the thesis scaffold."""
 
     def __init__(
         self,
@@ -32,7 +33,7 @@ class StandardSA(AlgorithmBase, AnnealingMixin):
             model,
             1,
             iterations,
-            repair_class=repair_class if repair_class is not None else GreedyRepair(),
+            repair_class=repair_class,
             verbose=verbose,
         )
         self._init_annealing(initial_temperature, cooling_rate, min_temperature)
@@ -47,10 +48,8 @@ class StandardSA(AlgorithmBase, AnnealingMixin):
         current = self.population[0]
 
         candidate_perm = choose_mutation(current.permutation, self.model)
-        repaired = self.repair_batch_wrapper(np.array([candidate_perm]))
-        candidates = evaluate_permutation_delta_batch([current], repaired, self.model)
+        candidate = evaluate_permutation(candidate_perm, self.model)
         self.logger.record_nfe(1)
-        candidate = candidates[0]
 
         if candidate.cost <= current.cost:
             self.population[0] = candidate

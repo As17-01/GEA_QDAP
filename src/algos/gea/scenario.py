@@ -3,7 +3,7 @@ from src.algos.core.standard_base import StandardBase
 
 
 class StandardGEAScenario1(StandardBase):
-    """Scenario 1 (RC crossover) on the Holland scaffold."""
+    """Scenario 1 (thesis dominant crossover) on the standard scaffold."""
 
     def __init__(
         self,
@@ -13,7 +13,6 @@ class StandardGEAScenario1(StandardBase):
         crossover_rate=0.7,
         mutation_rate=0.01,
         rc_rate=0.3,
-        elitism_count=1,
         repair_class=None,
         verbose=False,
     ):
@@ -21,14 +20,13 @@ class StandardGEAScenario1(StandardBase):
         self.crossover_rate = crossover_rate
         self.mutation_rate = mutation_rate
         self.rc_rate = rc_rate
-        self.elitism_count = elitism_count
 
     def step(self) -> None:
-        self.run_gea_generational(
+        self.run_batch_generational(
             self.crossover_rate,
             self.mutation_rate,
-            self.elitism_count,
-            rc_rate=self.rc_rate,
+            enable_scenario1=True,
+            scenario_crossover_rate=self.rc_rate,
         )
 
 
@@ -68,7 +66,7 @@ class ImprovedGEAScenario1(ImprovedBase):
 
 
 class StandardGEAScenario2(StandardBase):
-    """Scenario 2 (directed mutation) on the Holland scaffold."""
+    """Scenario 2 (thesis mask mutation) on the standard scaffold."""
 
     def __init__(
         self,
@@ -78,7 +76,6 @@ class StandardGEAScenario2(StandardBase):
         crossover_rate=0.7,
         mutation_rate=0.01,
         dm_rate=0.3,
-        elitism_count=1,
         repair_class=None,
         verbose=False,
     ):
@@ -86,14 +83,13 @@ class StandardGEAScenario2(StandardBase):
         self.crossover_rate = crossover_rate
         self.mutation_rate = mutation_rate
         self.dm_rate = dm_rate
-        self.elitism_count = elitism_count
 
     def step(self) -> None:
-        self.run_gea_generational(
+        self.run_batch_generational(
             self.crossover_rate,
             self.mutation_rate,
-            self.elitism_count,
-            dm_rate=self.dm_rate,
+            enable_scenario2=True,
+            scenario_mutation_rate=self.dm_rate,
         )
 
 
@@ -133,7 +129,7 @@ class ImprovedGEAScenario2(ImprovedBase):
 
 
 class StandardGEAScenario3(StandardBase):
-    """Scenario 3 (gene injection) on the Holland scaffold."""
+    """Scenario 3 (thesis combine_q) on the standard scaffold."""
 
     def __init__(
         self,
@@ -143,7 +139,6 @@ class StandardGEAScenario3(StandardBase):
         crossover_rate=0.7,
         mutation_rate=0.01,
         injection_rate=0.1,
-        elitism_count=1,
         repair_class=None,
         verbose=False,
     ):
@@ -151,14 +146,13 @@ class StandardGEAScenario3(StandardBase):
         self.crossover_rate = crossover_rate
         self.mutation_rate = mutation_rate
         self.injection_rate = injection_rate
-        self.elitism_count = elitism_count
 
     def step(self) -> None:
-        self.run_gea_generational(
+        self.run_batch_generational(
             self.crossover_rate,
             self.mutation_rate,
-            self.elitism_count,
-            injection_rate=self.injection_rate,
+            enable_scenario3=True,
+            scenario_mutation_rate_3=self.injection_rate,
         )
 
 

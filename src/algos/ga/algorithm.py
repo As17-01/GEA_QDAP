@@ -4,11 +4,7 @@ from src.algos.core.standard_base import StandardBase
 
 class StandardGA(StandardBase):
     """Holland (1992). Textbook GA on the standard scaffold: exponential parent selection,
-    probabilistic crossover/mutation, and (mu+lambda) pool survivor selection.
-
-    No diversity-aware selection, RF repair sampling, stagnation immigrants, or memetic
-    local search — the literal baseline the improved variants are compared against.
-    """
+    fixed-batch crossover/mutation, and (mu+lambda) pool survivor selection."""
 
     def __init__(
         self,
@@ -17,7 +13,6 @@ class StandardGA(StandardBase):
         iterations=1000,
         crossover_rate=0.7,
         mutation_rate=0.01,
-        elitism_count=1,
         repair_class=None,
         verbose=False,
     ):
@@ -30,14 +25,9 @@ class StandardGA(StandardBase):
         )
         self.crossover_rate = crossover_rate
         self.mutation_rate = mutation_rate
-        self.elitism_count = elitism_count
 
     def step(self) -> None:
-        self.run_crossover_mutation_generational(
-            self.crossover_rate,
-            self.mutation_rate,
-            self.elitism_count,
-        )
+        self.run_crossover_mutation_generational(self.crossover_rate, self.mutation_rate)
 
 
 class ImprovedGA(ImprovedBase):

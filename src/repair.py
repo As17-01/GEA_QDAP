@@ -219,6 +219,15 @@ _repair_core_rf = _make_repair_core(_select_target_rf, _select_evict_rf)
 _repair_core_batch_rf = _make_repair_core_batch(_repair_core_rf)
 
 
+# No-op repair for upstream-aligned standard algorithms (evaluate permutations as-is).
+class IdentityRepair:
+    def repair(self, perm: np.ndarray, model, max_repair_attempts: int = 100) -> np.ndarray:
+        return perm.copy()
+
+    def repair_batch(self, perms: np.ndarray, model, max_repair_attempts: int = 100) -> np.ndarray:
+        return perms.copy()
+
+
 # Repairs capacity violations by always evicting the worst violation and reassigning to
 # the cheapest feasible facility -- fully deterministic.
 class GreedyRepair:
