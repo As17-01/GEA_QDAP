@@ -24,11 +24,11 @@ from utils.labels import algo_label
 
 # (ga._target_, display name) — stems match results/*.json via algo_label in conf/run/common.yaml
 ALGOS = [
-    ("src.algos.ga_standard.StandardGA",       "Standard GA"),
+    ("src.algos.ga.StandardGA",                "Standard GA"),
     ("src.algos.ga_sa.SimulatedAnnealing",    "SA"),
     ("src.algos.ga_pso.ParticleSwarm",        "PSO"),
     ("src.algos.ga_gea.GEA",                  "GEA"),
-    ("src.algos.ga_improved_ga.ImprovedGA", "Improved GA"),
+    ("src.algos.ga.ImprovedGA",              "Improved GA"),
     ("src.algos.ga_gea_scenario_1.GEAScenario1", "GEA-S1"),
     ("src.algos.ga_gea_scenario_2.GEAScenario2", "GEA-S2"),
     ("src.algos.ga_gea_scenario_3.GEAScenario3", "GEA-S3"),
