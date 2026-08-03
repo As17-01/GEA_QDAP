@@ -222,3 +222,4 @@ __marimo__/
 .hydra/
 full_run.log
 scripts/results/
+backups/
