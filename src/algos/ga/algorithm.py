@@ -3,8 +3,8 @@ from src.algos.core.standard_base import StandardBase
 
 
 class StandardGA(StandardBase):
-    """Holland (1992). Textbook GA on the standard scaffold: fitness-proportionate selection,
-    probabilistic crossover/mutation, generational replacement with elitism.
+    """Holland (1992). Textbook GA on the standard scaffold: exponential parent selection,
+    probabilistic crossover/mutation, and (mu+lambda) pool survivor selection.
 
     No diversity-aware selection, RF repair sampling, stagnation immigrants, or memetic
     local search — the literal baseline the improved variants are compared against.
