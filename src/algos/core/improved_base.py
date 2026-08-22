@@ -360,6 +360,8 @@ class ImprovedBase(AlgorithmBase):
 
         pool += self.maybe_generate_immigrants()
         self.select_from_pool(pool)
+        if hasattr(self, "record_lambda_snapshot"):
+            self.record_lambda_snapshot()
 
     def run_annealing_generation(self, crossover_rate: float, mutation_rate: float) -> None:
         """Improved GA offspring filtered by Metropolis acceptance, then pool selection."""

@@ -285,6 +285,8 @@ class StandardBase(AlgorithmBase):
             candidates += self._adaptive_apply("base_gi", "lambda_gi", self._thesis_scenario3_pairs)
 
         self._pool_replace(candidates)
+        if hasattr(self, "record_lambda_snapshot"):
+            self.record_lambda_snapshot()
 
     def run_crossover_mutation_generational(self, crossover_rate: float, mutation_rate: float) -> None:
         self.run_batch_generational(crossover_rate, mutation_rate)

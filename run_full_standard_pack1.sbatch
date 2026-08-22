@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=gea_gqap_full_std
-#SBATCH --error=gea_gqap_full_std-%j.err
-#SBATCH --output=gea_gqap_full_std-%j.log
+#SBATCH --job-name=gea_gqap_std_p1
+#SBATCH --error=gea_gqap_std_p1-%j.err
+#SBATCH --output=gea_gqap_std_p1-%j.log
 #SBATCH --partition=rocky
 #SBATCH --time=336:00:00
 #SBATCH --cpus-per-task=16
@@ -25,13 +25,6 @@ ALGORITHMS=(
     standard_pso
     standard_hybrid_ga_pso
     standard_hybrid_ga_sa
-    standard_gea_scenario_1
-    standard_gea_scenario_2
-    standard_gea_scenario_3
-    standard_adaptive_gea
-    standard_adaptive_gea_scenario_1
-    standard_adaptive_gea_scenario_2
-    standard_adaptive_gea_scenario_3
 )
 
 for algo in "${ALGORITHMS[@]}"; do

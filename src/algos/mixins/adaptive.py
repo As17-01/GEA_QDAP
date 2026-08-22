@@ -3,9 +3,19 @@ from typing import Callable, List, Tuple
 
 from src.data.models import Individual
 
+_LAMBDA_ATTRS = (
+    "lambda_crossover",
+    "lambda_mutation",
+    "lambda_rc",
+    "lambda_dm",
+    "lambda_gi",
+)
+
 
 class AdaptiveRatesMixin:
     """Lambda-scaled operator rate control for crossover, mutation, and GEA scenario ops."""
+
+    lambda_history: list[dict[str, float]]
 
     def _init_adaptive_rates(
         self,
@@ -24,6 +34,21 @@ class AdaptiveRatesMixin:
         self.lambda_min = lambda_min
         self.lambda_max = lambda_max
         self.epsilon = epsilon
+        self.lambda_history = []
+
+    def snapshot_lambdas(self) -> dict[str, float]:
+        """Current adaptive λ values (only attributes present on this algorithm)."""
+        return {
+            name: float(getattr(self, name))
+            for name in _LAMBDA_ATTRS
+            if hasattr(self, name)
+        }
+
+    def record_lambda_snapshot(self) -> None:
+        """Append post-iteration λ values for plotting / analysis."""
+        if not hasattr(self, "lambda_history"):
+            self.lambda_history = []
+        self.lambda_history.append(self.snapshot_lambdas())
 
     def _init_adaptive_scenario_rate(self, base_attr: str, lambda_attr: str, rate: float) -> None:
         setattr(self, base_attr, rate)

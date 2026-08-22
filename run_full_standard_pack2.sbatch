@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=gea_gqap_full_imp
-#SBATCH --error=gea_gqap_full_imp-%j.err
-#SBATCH --output=gea_gqap_full_imp-%j.log
+#SBATCH --job-name=gea_gqap_std_p2
+#SBATCH --error=gea_gqap_std_p2-%j.err
+#SBATCH --output=gea_gqap_std_p2-%j.log
 #SBATCH --partition=rocky
 #SBATCH --time=336:00:00
 #SBATCH --cpus-per-task=16
@@ -18,20 +18,13 @@ module load Python
 source activate gea_gqap_v2_env
 
 ALGORITHMS=(
-    ga
-    gea
-    adaptive
-    sa
-    pso
-    hybrid_ga_pso
-    hybrid_ga_sa
-    gea_scenario_1
-    gea_scenario_2
-    gea_scenario_3
-    adaptive_gea
-    adaptive_gea_scenario_1
-    adaptive_gea_scenario_2
-    adaptive_gea_scenario_3
+    standard_gea_scenario_1
+    standard_gea_scenario_2
+    standard_gea_scenario_3
+    standard_adaptive_gea
+    standard_adaptive_gea_scenario_1
+    standard_adaptive_gea_scenario_2
+    standard_adaptive_gea_scenario_3
 )
 
 for algo in "${ALGORITHMS[@]}"; do

@@ -55,6 +55,24 @@ def calculate_statistics(values: List[float]) -> Dict[str, float]:
     }
 
 
+def average_lambda_trajectories(trajectories: List[List[dict]]) -> List[dict]:
+    """Element-wise mean of λ trajectories (truncate to shortest run)."""
+    valid = [t for t in trajectories if t]
+    if not valid:
+        return []
+    n_iters = min(len(t) for t in valid)
+    keys = valid[0][0].keys()
+    averaged: List[dict] = []
+    for i in range(n_iters):
+        snap: dict[str, float] = {}
+        for key in keys:
+            vals = [float(t[i][key]) for t in valid if key in t[i]]
+            if vals:
+                snap[key] = float(np.mean(vals))
+        averaged.append(snap)
+    return averaged
+
+
 def run_single_experiment(
     dataset_name: str,
     algo_label: str,
@@ -74,25 +92,28 @@ def run_single_experiment(
         hitting_time = getattr(ga, "hitting_time", None)
         nfe = getattr(ga.logger, "nfe", 0)
         cost_history = getattr(ga.logger, "cost_history", [])
+        lambda_history = getattr(ga, "lambda_history", None)
 
         if not math.isfinite(best.cost):
             return {
                 "dataset": dataset_name, "run": run_num, "cost": None,
                 "elapsed": elapsed, "hitting_time": None, "nfe": nfe,
-                "cost_history": [], "error": f"infeasible: cost={best.cost}",
+                "cost_history": [], "lambda_history": [], "error": f"infeasible: cost={best.cost}",
             }
 
         return {
             "dataset": dataset_name, "run": run_num, "cost": best.cost,
             "elapsed": elapsed, "hitting_time": hitting_time, "nfe": nfe,
-            "cost_history": cost_history, "error": None,
+            "cost_history": cost_history,
+            "lambda_history": lambda_history or [],
+            "error": None,
         }
 
     except Exception as e:
         return {
             "dataset": dataset_name, "run": run_num, "cost": None,
             "elapsed": time.perf_counter() - start, "hitting_time": None,
-            "nfe": 0, "cost_history": [], "error": str(e),
+            "nfe": 0, "cost_history": [], "lambda_history": [], "error": str(e),
         }
 
 
@@ -116,6 +137,7 @@ def run_all_experiments(
     hitting_times_by_dataset: Dict[str, List[float]] = {ds: [] for ds in datasets}
     nfes_by_dataset: Dict[str, List[int]] = {ds: [] for ds in datasets}
     histories_by_dataset: Dict[str, List[list]] = {ds: [] for ds in datasets}
+    lambda_histories_by_dataset: Dict[str, List[list]] = {ds: [] for ds in datasets}
     errors_by_dataset: Dict[str, int] = {ds: 0 for ds in datasets}
     completed_by_dataset: Dict[str, int] = {ds: 0 for ds in datasets}
 
@@ -140,6 +162,8 @@ def run_all_experiments(
                 nfes_by_dataset[ds].append(res["nfe"])
                 if track_history and res["cost_history"]:
                     histories_by_dataset[ds].append(res["cost_history"])
+                if res["lambda_history"]:
+                    lambda_histories_by_dataset[ds].append(res["lambda_history"])
             completed_by_dataset[ds] += 1
 
             # Print one aggregated line per dataset, once all its runs are in, instead of
@@ -161,7 +185,12 @@ def run_all_experiments(
     return [
         {
             "dataset": ds,
-            "results": {algo_label: calculate_statistics(results_by_dataset[ds])},
+            "results": {
+                algo_label: {
+                    **calculate_statistics(results_by_dataset[ds]),
+                    "per_run": results_by_dataset[ds],
+                }
+            },
             "runtime": {algo_label: {**calculate_statistics(runtimes_by_dataset[ds]), "total": sum(runtimes_by_dataset[ds])}},
             "hitting_time": {
                 algo_label: {
@@ -179,6 +208,18 @@ def run_all_experiments(
                 }
             },
             **({"cost_history": {algo_label: histories_by_dataset[ds]}} if track_history else {}),
+            **(
+                {
+                    "lambda_history": {
+                        algo_label: {
+                            "per_run": lambda_histories_by_dataset[ds],
+                            "mean": average_lambda_trajectories(lambda_histories_by_dataset[ds]),
+                        }
+                    }
+                }
+                if lambda_histories_by_dataset[ds]
+                else {}
+            ),
             "errors": errors_by_dataset[ds],
         }
         for ds in datasets
