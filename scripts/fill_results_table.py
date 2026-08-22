@@ -2,7 +2,8 @@
 """
 Fill the Table_of_Results ALGEA/GQAP Excel workbook from scripts/results/*.json.
 
-Experiment 1 and Experiment 2: all improved-family algorithms (cols B–CB).
+Experiment 1: standard-family results for the original/no-repair setup.
+Experiment 2: improved-family results for the new chromosome/repair setup.
 
 Usage:
     python scripts/fill_results_table.py
@@ -28,7 +29,7 @@ DEFAULT_XLSX = Path(
 )
 
 # (results/*.json stem, first column for Mean ± Std)
-ALGO_COLUMNS: list[tuple[str, int]] = [
+IMPROVED_ALGO_COLUMNS: list[tuple[str, int]] = [
     ("ga", 2),
     ("gea_scenario_1", 8),
     ("gea_scenario_2", 14),
@@ -43,6 +44,23 @@ ALGO_COLUMNS: list[tuple[str, int]] = [
     ("adaptive_gea_scenario_2", 68),
     ("adaptive_gea_scenario_3", 74),
     ("adaptive_gea", 80),
+]
+
+STANDARD_ALGO_COLUMNS: list[tuple[str, int]] = [
+    ("standard", 2),
+    ("standard_gea_scenario_1", 8),
+    ("standard_gea_scenario_2", 14),
+    ("standard_gea_scenario_3", 20),
+    ("standard_gea", 26),
+    ("standard_sa", 32),
+    ("standard_pso", 38),
+    ("standard_hybrid_ga_sa", 44),
+    ("standard_hybrid_ga_pso", 50),
+    ("standard_adaptive", 56),
+    ("standard_adaptive_gea_scenario_1", 62),
+    ("standard_adaptive_gea_scenario_2", 68),
+    ("standard_adaptive_gea_scenario_3", 74),
+    ("standard_adaptive_gea", 80),
 ]
 
 DATA_START_ROW = 5
@@ -97,16 +115,13 @@ def _dataset_rows(ws) -> dict[str, int]:
 def fill_sheet(
     ws,
     data: dict[str, dict[str, dict]],
-    *,
-    min_col: int = 2,
+    algo_columns: list[tuple[str, int]],
 ) -> int:
     """Write result values into ws; return number of cells written."""
     dataset_rows = _dataset_rows(ws)
     written = 0
 
-    for stem, start_col in ALGO_COLUMNS:
-        if start_col < min_col:
-            continue
+    for stem, start_col in algo_columns:
         if stem not in data:
             print(f"  Warning: no results for {stem!r}, skipping column {start_col}")
             continue
@@ -158,13 +173,13 @@ def main() -> None:
         sys.exit(1)
 
     ws2 = wb["Experiment 2"]
-    n2 = fill_sheet(ws2, data, min_col=2)
-    print(f"Experiment 2: wrote {n2} cells")
+    n2 = fill_sheet(ws2, data, IMPROVED_ALGO_COLUMNS)
+    print(f"Experiment 2 (improved): wrote {n2} cells")
 
     if "Experiment 1" in wb.sheetnames:
         ws1 = wb["Experiment 1"]
-        n1 = fill_sheet(ws1, data, min_col=2)
-        print(f"Experiment 1: wrote {n1} cells")
+        n1 = fill_sheet(ws1, data, STANDARD_ALGO_COLUMNS)
+        print(f"Experiment 1 (standard): wrote {n1} cells")
     else:
         print("Sheet 'Experiment 1' not found, skipping.")
 
