@@ -18,7 +18,8 @@ citation, and the shared framework (operators, repair, selection) they are built
 - **Two scaffolding bases**: `StandardBase` (fitness-proportionate selection, generational
   replacement, `GreedyRepair`) and `ImprovedBase` (diversity selection, pool replacement,
   `RFRepair`, stagnation immigrants, memetic local search)
-- **Mixins** for cross-cutting behaviour: `AdaptiveRatesMixin`, `AnnealingMixin`, `PSOMixin`
+- **Mixins** for cross-cutting behaviour: `AdaptiveRatesMixin` (ALGEA normalized
+  reward/punishment, fading rewards, and improvement/tournament survivors), `AnnealingMixin`, `PSOMixin`
 - **Reproducible runs**: `seed_all()` seeds both NumPy and numba; smoke tests pin golden
   costs for every config on dataset subsets (`tests/test_algorithms.py`)
 

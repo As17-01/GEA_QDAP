@@ -14,14 +14,27 @@ class StandardAdaptiveGA(StandardBase, AdaptiveRatesMixin):
         crossover_rate=0.7,
         mutation_rate=0.3,
         alpha=0.01,
-        lambda_min=0.4,
-        lambda_max=1.5,
+        lambda_min=0.0,
+        lambda_max=1.0,
         epsilon=1e-5,
         repair_class=None,
         verbose=False,
+        gamma=0.2,
+        tournament_size=3,
+        attenuate_reward=True,
     ):
         super().__init__(model, population_size, iterations, repair_class=repair_class, verbose=verbose)
-        self._init_adaptive_rates(crossover_rate, mutation_rate, alpha, lambda_min, lambda_max, epsilon)
+        self._init_adaptive_rates(
+            crossover_rate,
+            mutation_rate,
+            alpha,
+            lambda_min,
+            lambda_max,
+            epsilon,
+            gamma=gamma,
+            tournament_size=tournament_size,
+            attenuate_reward=attenuate_reward,
+        )
 
     def step(self) -> None:
         self.run_adaptive_generational()
@@ -38,14 +51,17 @@ class ImprovedAdaptiveGA(ImprovedBase, AdaptiveRatesMixin):
         crossover_rate=0.7,
         mutation_rate=0.3,
         alpha=0.01,
-        lambda_min=0.4,
-        lambda_max=1.5,
+        lambda_min=0.0,
+        lambda_max=1.0,
         epsilon=1e-5,
         repair_class=None,
         selector=None,
         stagnation_limit=30,
         immigrant_rate=0.1,
         verbose=False,
+        gamma=0.2,
+        tournament_size=3,
+        attenuate_reward=True,
     ):
         super().__init__(
             model,
@@ -57,7 +73,17 @@ class ImprovedAdaptiveGA(ImprovedBase, AdaptiveRatesMixin):
             immigrant_rate=immigrant_rate,
             verbose=verbose,
         )
-        self._init_adaptive_rates(crossover_rate, mutation_rate, alpha, lambda_min, lambda_max, epsilon)
+        self._init_adaptive_rates(
+            crossover_rate,
+            mutation_rate,
+            alpha,
+            lambda_min,
+            lambda_max,
+            epsilon,
+            gamma=gamma,
+            tournament_size=tournament_size,
+            attenuate_reward=attenuate_reward,
+        )
 
     def step(self) -> None:
         self.run_adaptive_generation()

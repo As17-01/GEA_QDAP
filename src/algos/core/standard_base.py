@@ -100,7 +100,9 @@ class StandardBase(AlgorithmBase):
         total = weights.sum()
         return weights / total if total > 0 else np.full(len(costs), 1.0 / len(costs))
 
-    def _standard_crossover_pairs(self, n: int) -> list[tuple[Individual, Individual]]:
+    def _standard_crossover_pairs(
+        self, n: int, *, best_parent_reference: bool = False
+    ) -> list[tuple[Individual, Individual]]:
         n = n - (n % 2)
         num_pairs = n // 2
         if not num_pairs:
@@ -112,13 +114,14 @@ class StandardBase(AlgorithmBase):
             i1, i2 = parent_idx[2 * k], parent_idx[2 * k + 1]
             p1, p2 = self.population[i1], self.population[i2]
             (child1, _), (child2, _) = choose_crossover((p1, p2), self.model)
+            reference = min((p1, p2), key=lambda ind: ind.cost)
             ind1 = evaluate_permutation(child1, self.model)
             ind2 = evaluate_permutation(child2, self.model)
             self.logger.record_nfe(2)
             if math.isfinite(ind1.cost):
-                pairs.append((ind1, p1))
+                pairs.append((ind1, reference if best_parent_reference else p1))
             if math.isfinite(ind2.cost):
-                pairs.append((ind2, p2))
+                pairs.append((ind2, reference if best_parent_reference else p2))
         return pairs
 
     def _standard_mutate_pairs(self, n: int) -> list[tuple[Individual, Individual]]:
@@ -136,7 +139,9 @@ class StandardBase(AlgorithmBase):
                 pairs.append((child, baseline))
         return pairs
 
-    def _thesis_scenario1_pairs(self, n: int) -> list[tuple[Individual, Individual]]:
+    def _thesis_scenario1_pairs(
+        self, n: int, *, best_parent_reference: bool = False
+    ) -> list[tuple[Individual, Individual]]:
         if n <= 0:
             return []
 
@@ -158,12 +163,13 @@ class StandardBase(AlgorithmBase):
             idx = int(np.searchsorted(np.cumsum(probs), np.random.random(), side="right"))
             idx = min(idx, n_pop - 1)
             partner = self.population[idx]
+            reference = min((dominant_individual, partner), key=lambda ind: ind.cost)
             (child1, _), (child2, _) = choose_crossover((dominant_individual, partner), self.model)
             for child_perm, baseline in ((child1, partner), (child2, partner)):
                 child = evaluate_permutation(child_perm, self.model)
                 self.logger.record_nfe(1)
                 if math.isfinite(child.cost):
-                    pairs.append((child, baseline))
+                    pairs.append((child, reference if best_parent_reference else baseline))
         return pairs
 
     def _thesis_scenario2_pairs(self, n: int) -> list[tuple[Individual, Individual]]:
@@ -273,20 +279,27 @@ class StandardBase(AlgorithmBase):
         dm_rate: float = 0.0,
         injection_rate: float = 0.0,
     ) -> None:
-        offspring = self._adaptive_apply("base_crossover", "lambda_crossover", self._standard_crossover_pairs)
+        offspring = self._adaptive_apply(
+            "base_crossover",
+            "lambda_crossover",
+            lambda n: self._standard_crossover_pairs(n, best_parent_reference=True),
+        )
         mutations = self._adaptive_apply("base_mutation", "lambda_mutation", self._standard_mutate_pairs)
-        candidates = offspring + mutations
+        subpopulations = [[(ind, ind) for ind in self.population], offspring, mutations]
 
         if rc_rate > 0:
-            candidates += self._adaptive_apply("base_rc", "lambda_rc", self._thesis_scenario1_pairs)
+            subpopulations.append(
+                self._adaptive_apply(
+                    "base_rc", "lambda_rc", lambda n: self._thesis_scenario1_pairs(n, best_parent_reference=True)
+                )
+            )
         if dm_rate > 0:
-            candidates += self._adaptive_apply("base_dm", "lambda_dm", self._thesis_scenario2_pairs)
+            subpopulations.append(self._adaptive_apply("base_dm", "lambda_dm", self._thesis_scenario2_pairs))
         if injection_rate > 0:
-            candidates += self._adaptive_apply("base_gi", "lambda_gi", self._thesis_scenario3_pairs)
+            subpopulations.append(self._adaptive_apply("base_gi", "lambda_gi", self._thesis_scenario3_pairs))
 
-        self._pool_replace(candidates)
-        if hasattr(self, "record_lambda_snapshot"):
-            self.record_lambda_snapshot()
+        self._select_adaptive_survivors(subpopulations)
+        self.record_lambda_snapshot()
 
     def run_crossover_mutation_generational(self, crossover_rate: float, mutation_rate: float) -> None:
         self.run_batch_generational(crossover_rate, mutation_rate)

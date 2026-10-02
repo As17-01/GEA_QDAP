@@ -20,7 +20,7 @@ the tuning and experimental procedures.
 | `core/standard_base.py` | `StandardBase` — thesis scaffold: heuristic2 init, pool selection |
 | `core/improved_base.py` | `ImprovedBase` — diversity selection, pool replacement, RC/DM/GI helpers, memetic polish |
 | `core/logger.py` | `GALogger` — iteration timing, NFE, operator stats |
-| `mixins/adaptive.py` | `AdaptiveRatesMixin` — lambda-scaled operator counts |
+| `mixins/adaptive.py` | `AdaptiveRatesMixin` — ALGEA reward/punishment updates and survivor selection |
 | `mixins/annealing.py` | `AnnealingMixin` — Metropolis acceptance + cooling |
 | `mixins/pso.py` | `PSOMixin` — particle tracking, velocity/discrete PSO moves |
 | `ga/algorithm.py` | `StandardGA`, `ImprovedGA` |
@@ -272,17 +272,64 @@ Same lambda-adaptive crossover/mutation on the thesis scaffold with pool survivo
 
 ### Adaptive rate mechanism
 
-Each operator present in an adaptive algorithm maintains its own lambda multiplier
-(starting at `1.0`). Every generation:
+All ten adaptive variants follow pages 1–12 of
+[Adaptive Learning Based Genetic Engineering Algorithm (ALGEA)](Adaptive_Learning_Based_Genetic_Engineering_Algorithm_ALGEA_Paper.pdf).
+Shared logic lives in `src/algos/mixins/adaptive.py` (`AdaptiveRatesMixin`).
 
-1. Operator count: `n = base_rate · population_size · lambda`.
-2. Each offspring's improvement over its **own parent baseline** is accumulated:
-   `delta = (parent_cost - child_cost) / (parent_cost + epsilon)`.
-3. `lambda_new = clip(lambda_old + alpha · delta_sum, lambda_min, lambda_max)`.
+Each operator maintains an independent lambda in `[0, 1]`. Configurable bounds must
+satisfy `0 <= lambda_min <= lambda_max <= 1`; the defaults are `0` and `1`. Lambdas start at
+`(lambda_min + lambda_max) / 2` (Eq. 4) and reset to that midpoint for every `run()`.
+The project's existing batching convention is retained:
+`n = int(base_rate · population_size · lambda)`, with each crossover helper handling
+its paired offspring count. Lambdas do not have to sum to one.
 
-Comparing to the parent baseline (not the global best) prevents lambda from collapsing
-toward `lambda_min` once the population converges. Shared logic lives in
-`src/algos/mixins/adaptive.py` (`AdaptiveRatesMixin`).
+For minimization, an offspring's normalized improvement is
+`delta = (reference_cost - child_cost) / (abs(reference_cost) + epsilon)` (Eq. 5).
+Mutation, DM, and GI use the source individual. Crossover and RC use the **best of
+the participating parents** (Eq. 11). Incremental cost evaluation still uses its
+original parent baseline; that computational baseline is separate from the learning
+reference. Nonfinite objective values are excluded from the performance signal,
+and infeasible candidates are excluded from survivor selection.
+
+For each operator batch, accumulate the two magnitudes separately (Eqs. 13–18):
+
+```text
+R = sum(max(delta, 0))
+Q = sum(max(-delta, 0))
+r = R / (R + Q + epsilon)
+q = Q / (R + Q + epsilon)
+rho = 1 - t / T
+lambda_new = clip(lambda_old + alpha * (rho * r - q), lambda_min, lambda_max)
+```
+
+This implements Eq. 63: reward fades as the generation budget is consumed, while
+punishment remains active. The run loop uses `t = 1, ..., T`, so `rho = 0` in the
+last generation. Empty batches and unchanged offspring have a neutral signal.
+Setting `attenuate_reward: false` uses `rho = 1` throughout the run, implementing
+the optional variant described on p. 9 (Eq. 36). Normalizing by `R + Q + epsilon`
+keeps the update bounded by the learning rate even when offspring counts differ.
+
+### Adaptive survivor selection
+
+Page 10, Step 6 is applied to both adaptive scaffolds:
+
+1. Preserve the best feasible chromosome from the parents and each nonempty operator
+   subpopulation, skipping duplicates. If these elites exceed the population size,
+   retain the cheapest ones.
+2. Deduplicate the remaining candidate pool. A chromosome produced more than once
+   keeps its largest improvement score; unchanged parents and immigrants have score zero.
+3. Transfer the best `gamma` fraction of that remaining pool by descending improvement,
+   capped by the available population slots. Ties prefer lower cost.
+4. Fill the remaining slots using cost-based tournaments without replacement.
+
+`gamma` is a fraction in `[0, 1]`, so `gamma: 0.2` means 20%; the quota is rounded
+down. Pages 1–12 do not prescribe gamma or tournament size: the configurable defaults
+are `gamma: 0.2` and `tournament_size: 3`. Both are included in adaptive tuning spaces.
+If too few unique feasible candidates remain, random mutations, with the scaffold's
+repair policy, replenish the pool. Their evaluations count toward NFE but do not
+update an operator lambda. Replenishment is bounded by `100 · population_size`
+attempts and raises an explicit error if a full unique population cannot be formed.
+Improved-family elite polishing skips moves that would duplicate another survivor.
 
 | Algorithm | Adaptive operators |
 |---|---|
@@ -488,7 +535,7 @@ Hydra config: `scripts/conf/adaptive_gea.yaml` → results file `adaptivegea.jso
 
 ### `StandardAdaptiveGEA` (config: `standard_adaptive_gea`)
 
-Same adaptive operator scaling on the Holland scaffold with generational replacement.
+Same adaptive operator scaling and improvement/tournament survivor selection on the thesis scaffold.
 
 ---
 

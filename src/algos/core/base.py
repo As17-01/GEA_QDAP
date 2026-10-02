@@ -67,6 +67,9 @@ class AlgorithmBase(ABC):
 
     def run(self, time_limit: float | None = None):
         self.logger.start_run()
+        reset_adaptive_rates = getattr(self, "reset_adaptive_rates", None)
+        if reset_adaptive_rates is not None:
+            reset_adaptive_rates()
         self.initialize_population()
 
         self.hitting_time: float = self.logger.elapsed()

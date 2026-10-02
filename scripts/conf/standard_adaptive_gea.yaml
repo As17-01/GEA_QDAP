@@ -17,7 +17,10 @@ ga:
   dm_rate: 0.10150148905202014
   injection_rate: 0.29474678416214284
   alpha: 0.009801927028492408
-  lambda_min: 0.5801553721241383
-  lambda_max: 1.6692365117099865
+  lambda_min: 0.0
+  lambda_max: 1.0
   epsilon: 1e-5
+  gamma: 0.2
+  tournament_size: 3
+  attenuate_reward: true
   verbose: false

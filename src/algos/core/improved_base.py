@@ -54,7 +54,9 @@ class ImprovedBase(AlgorithmBase):
         with self.logger.timed("survivor_selection"):
             self.population = self.selector.select_from_pool(pool, self.population_size, self.progress)
 
-    def crossover(self, probabilities: np.ndarray, n: int) -> List[Tuple[Individual, Individual]]:
+    def crossover(
+        self, probabilities: np.ndarray, n: int, *, best_parent_reference: bool = False
+    ) -> List[Tuple[Individual, Individual]]:
         offspring = []
         valid = 0
         new_best = 0
@@ -62,6 +64,7 @@ class ImprovedBase(AlgorithmBase):
         with self.logger.timed("crossover"):
             raw_perms = []
             baselines = []
+            references = []
 
             num_pairs = len(range(0, n, 2))
             if num_pairs:
@@ -75,12 +78,15 @@ class ImprovedBase(AlgorithmBase):
 
                     raw_perms.extend((child1, child2))
                     baselines.extend((baseline1, baseline2))
+                    if best_parent_reference:
+                        reference = min((p1, p2), key=lambda ind: ind.cost)
+                        references.extend((reference, reference))
 
             if raw_perms:
                 repaired = self.repair_batch_wrapper(np.array(raw_perms))
                 children = evaluate_permutation_delta_batch(baselines, repaired, self.model)
                 self.logger.record_nfe(len(raw_perms))
-                offspring = list(zip(children, baselines))
+                offspring = list(zip(children, references if best_parent_reference else baselines))
 
                 for child in children:
                     if math.isfinite(child.cost):
@@ -180,7 +186,7 @@ class ImprovedBase(AlgorithmBase):
             return perm
 
     def _robust_chromosome_crossover(
-        self, probabilities: np.ndarray, n: int
+        self, probabilities: np.ndarray, n: int, *, best_parent_reference: bool = False
     ) -> List[Tuple[Individual, Individual]]:
         offspring: List[Individual] = []
         baselines_out: List[Individual] = []
@@ -195,6 +201,7 @@ class ImprovedBase(AlgorithmBase):
 
                 raw_perms = []
                 baselines = []
+                references = []
                 for k in range(num_pairs):
                     i1, i2 = parent_indices[2 * k], parent_indices[2 * k + 1]
                     p1, p2 = self.population[i1], self.population[i2]
@@ -202,10 +209,13 @@ class ImprovedBase(AlgorithmBase):
                     (child1, base1), (child2, base2) = crossover_robust_chromosome(p1, p2, self.model)
                     raw_perms.extend((child1, child2))
                     baselines.extend((base1, base2))
+                    if best_parent_reference:
+                        reference = min((p1, p2), key=lambda ind: ind.cost)
+                        references.extend((reference, reference))
 
                 repaired = self.repair_batch_wrapper(np.array(raw_perms))
                 offspring = evaluate_permutation_delta_batch(baselines, repaired, self.model)
-                baselines_out = baselines
+                baselines_out = references if best_parent_reference else baselines
                 self.logger.record_nfe(len(raw_perms))
 
                 for child in offspring:
@@ -277,6 +287,11 @@ class ImprovedBase(AlgorithmBase):
             ind = self.population[idx]
             polished_perm = self.local_search(ind.permutation)
             if polished_perm is not ind.permutation and not np.array_equal(polished_perm, ind.permutation):
+                if getattr(self, "enforce_unique_population", False) and any(
+                    other_idx != idx and np.array_equal(polished_perm, other.permutation)
+                    for other_idx, other in enumerate(self.population)
+                ):
+                    continue
                 self.population[idx] = evaluate_permutation(polished_perm, self.model)
 
     def run_gea_generation(
@@ -344,24 +359,24 @@ class ImprovedBase(AlgorithmBase):
         """One improved-family adaptive generation with lambda-scaled operator counts."""
         probs = self.compute_selection_probabilities()
         offspring, mutations = self._adaptive_crossover_and_mutation(
-            lambda n: self.crossover(probs, n),
+            lambda n: self.crossover(probs, n, best_parent_reference=True),
             lambda n: self.mutate(n),
         )
 
-        pool = self.population + offspring + mutations
+        subpopulations = [[(ind, ind) for ind in self.population], offspring, mutations]
         if rc_rate > 0:
-            pool += self._adaptive_robust_chromosome_crossover(
-                lambda n: self._robust_chromosome_crossover(probs, n)
+            subpopulations.append(
+                self._adaptive_robust_chromosome_crossover(
+                    lambda n: self._robust_chromosome_crossover(probs, n, best_parent_reference=True)
+                )
             )
         if dm_rate > 0:
-            pool += self._adaptive_directed_mutation(lambda n: self._directed_mutation(n))
+            subpopulations.append(self._adaptive_directed_mutation(lambda n: self._directed_mutation(n)))
         if injection_rate > 0:
-            pool += self._adaptive_gene_injection(lambda n: self._gene_injection(n))
+            subpopulations.append(self._adaptive_gene_injection(lambda n: self._gene_injection(n)))
 
-        pool += self.maybe_generate_immigrants()
-        self.select_from_pool(pool)
-        if hasattr(self, "record_lambda_snapshot"):
-            self.record_lambda_snapshot()
+        self._select_adaptive_survivors(subpopulations, self.maybe_generate_immigrants())
+        self.record_lambda_snapshot()
 
     def run_annealing_generation(self, crossover_rate: float, mutation_rate: float) -> None:
         """Improved GA offspring filtered by Metropolis acceptance, then pool selection."""

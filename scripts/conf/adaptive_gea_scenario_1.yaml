@@ -16,9 +16,12 @@ ga:
   mutation_rate: 0.587135462861959
   rc_rate: 0.5756888179314985
   alpha: 0.038424719387308355
-  lambda_min: 0.5895881759974847
-  lambda_max: 1.8667379161527589
+  lambda_min: 0.0
+  lambda_max: 1.0
   epsilon: 1e-5
+  gamma: 0.2
+  tournament_size: 3
+  attenuate_reward: true
   stagnation_limit: 11
   immigrant_rate: 0.14334472200479442
   verbose: false
