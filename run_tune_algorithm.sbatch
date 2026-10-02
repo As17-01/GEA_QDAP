@@ -22,6 +22,17 @@ ALGORITHMS=(
     gea
     adaptive
     sa
+    ga
+    pso
+    hybrid_ga_pso
+    hybrid_ga_sa
+    gea_scenario_1
+    gea_scenario_2
+    gea_scenario_3
+    adaptive_gea
+    adaptive_gea_scenario_1
+    adaptive_gea_scenario_2
+    adaptive_gea_scenario_3
 )
 
 for algo in "${ALGORITHMS[@]}"; do
